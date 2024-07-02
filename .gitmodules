@@ -5,3 +5,6 @@
 	path = externalSrc/rapidjson
 	url = https://github.com/Tencent/rapidjson
 	branch = version1.1.0
+[submodule "externalSrc/libredwg"]
+	path = externalSrc/libredwg
+	url = https://github.com/LibreDWG/libredwg
