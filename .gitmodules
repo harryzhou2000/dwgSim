@@ -1,3 +1,7 @@
-[submodule "argparse"]
-	path = external/argparse
-	url = https://github.com/p-ranav/argparse/v3.0
+[submodule "externalSrc/argparse"]
+	path = externalSrc/argparse
+	url = https://github.com/p-ranav/argparse
+[submodule "externalSrc/rapidjson"]
+	path = externalSrc/rapidjson
+	url = https://github.com/Tencent/rapidjson
+	branch = version1.1.0

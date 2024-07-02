@@ -6,6 +6,8 @@ project(DNDSR LANGUAGES CXX)
 
 find_library(EXTERNAL_LIB_LIBREDWG NAMES libredwg redwg  REQUIRED)
 find_path(EXTERNAL_INCLUDE_LIBREDWG dwg.h REQUIRED)
+find_path(EXTERNAL_INCLUDE_ARGPARSE argparse REQUIRED PATHS
+    externalSrc/argparse/include)
 
 
 add_executable(dwgsim ${CMAKE_SOURCE_DIR}/src/dwgsim.cpp)
