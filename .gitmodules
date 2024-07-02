@@ -1,0 +1,3 @@
+[submodule "argparse"]
+	path = external/argparse
+	url = https://github.com/p-ranav/argparse/v3.0
