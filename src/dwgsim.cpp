@@ -1,5 +1,5 @@
 #include "dwgsimDefs.h"
-
+#include "dwgsimReader.hpp"
 
 int main(int argc, char *argv[])
 {
@@ -25,18 +25,18 @@ int main(int argc, char *argv[])
         std::cout << "writing to" << argparser.get("-o") << std::endl;
     else
         std::cout << "writing to stdout" << std::endl;
-
     std::string filename_in = argparser.get("input");
-    Dwg_Data dwg;
-    std::memset(&dwg, 0, sizeof(dwg));
-    dwgError = dwg_read_file(filename_in.c_str(), &dwg);
-    if (dwgError >= DWG_ERR_CRITICAL)
-    {
-        std::cerr << "READ ERROR 0x" << std::hex << dwgError << std::endl;
-        throw std::runtime_error("file read error");
-    }
 
-    dwg_free(&dwg);
+    try
+    {
+        DwgSimReader reader(filename_in);
+        reader.DebugPrint();
+    }
+    catch (const std::exception &err)
+    {
+        std::cerr << err.what() << std::endl;
+        return 2;
+    }
 
     return 0;
 }

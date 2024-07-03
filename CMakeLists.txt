@@ -49,6 +49,7 @@ add_executable(dwgsim ${CMAKE_SOURCE_DIR}/src/dwgsim.cpp)
 
 if(MSVC)
   set(redwg libredwg)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -wd4244 -wd4800 -wd4805 -wd4101 -wd4996 -D_CRT_NONSTDC_NO_WARNINGS -D_CRT_SECURE_NO_WARNINGS")
 else()
   set(redwg redwg)
 endif()
