@@ -81,7 +81,7 @@ namespace DwgSim
         rapidjson::Document doc;
         Dwg_Data dwg;
         int dwgError{0};
-        std::map<BITCODE_H, LayerRecord> layerNames;
+        std::map<BITCODE_RLL, LayerRecord> layerNames;
 
     public:
         Reader(const std::string &filename_in)
@@ -115,14 +115,16 @@ namespace DwgSim
 
         void recordLayerName(dwg_obj_ent *entGen)
         {
+            if (layerNames.count(entGen->layer->absolute_ref))
+                return;
             int err{0};
             auto layer_name = dwg_ent_get_layer_name(entGen, &err);
             if (err)
                 throw field_query_error("dwg_ent_get_layer_name failed");
             if (layer_name)
-                layerNames[entGen->layer] = LayerRecord{layerNames.size(), layer_name};
+                layerNames[entGen->layer->absolute_ref] = LayerRecord{layerNames.size(), layer_name};
             else
-                layerNames[entGen->layer] = LayerRecord{layerNames.size(), "UNKNOWN_LAYER"};
+                layerNames[entGen->layer->absolute_ref] = LayerRecord{layerNames.size(), "UNKNOWN_LAYER"};
             if (IS_FROM_TU_DWG((&dwg))) //!
                 free(layer_name);
         }
@@ -233,12 +235,11 @@ namespace DwgSim
                     auto entGen = dwg_object_to_entity(obj, &err);
                     if (err)
                         throw field_query_error("dwg_object_to_entity failed");
-                    if (!layerNames.count(entGen->layer))
-                        recordLayerName(entGen);
+                    recordLayerName(entGen);
                     if (type == DWG_TYPE_LINE)
                     {
                         auto ent = dwg_object_to_LINE(obj);
-                        std::cout << layerNames.at(entGen->layer).name << std::endl;
+                        std::cout << layerNames.at(entGen->layer->absolute_ref).name << std::endl;
                         std::cout << ent->start.x << "," << ent->start.y << "," << ent->start.z << ", ";
                         std::cout << ent->end.x << "," << ent->end.y << "," << ent->end.z << std::endl;
                     }
@@ -283,12 +284,12 @@ namespace DwgSim
                 auto entGen = dwg_object_to_entity(obj, &err);
                 if (err)
                     throw field_query_error("dwg_object_to_entity failed");
-                if (!layerNames.count(entGen->layer))
-                    recordLayerName(entGen);
+
+                recordLayerName(entGen);
 
                 rapidjson::Value entJson(rapidjson::kObjectType);
                 entJson.AddMember("name", rapidjson::GenericStringRef<char>(name.c_str()), alloc);
-                entJson.AddMember("layerId", layerNames.at(entGen->layer).readId, alloc);
+                entJson.AddMember("layerId", (size_t)(entGen->layer->absolute_ref), alloc);
 
                 if (type == DWG_TYPE_LINE)
                 {
