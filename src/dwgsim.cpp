@@ -1,5 +1,6 @@
 #include "dwgsimDefs.h"
 #include "dwgsimReader.hpp"
+#include <fstream>
 
 int main(int argc, char *argv[])
 {
@@ -29,8 +30,18 @@ int main(int argc, char *argv[])
 
     try
     {
-        DwgSimReader reader(filename_in);
-        reader.DebugPrint();
+        DwgSim::Reader reader(filename_in);
+        // reader.DebugPrint();
+        reader.DebugPrint1();
+
+        reader.CollectModelSpaceEntities();
+        if (argparser.is_used("-o"))
+        {
+            auto o = std::ofstream(argparser.get("-o"));
+            reader.PrintDoc(o, 2);
+        }
+        else 
+            reader.PrintDoc(std::cout, 2);
     }
     catch (const std::exception &err)
     {
