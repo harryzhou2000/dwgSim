@@ -288,7 +288,7 @@ namespace DwgSim
                 recordLayerName(entGen);
 
                 rapidjson::Value entJson(rapidjson::kObjectType);
-                entJson.AddMember("name", rapidjson::GenericStringRef<char>(name.c_str()), alloc);
+                entJson.AddMember("type", rapidjson::GenericStringRef<char>(name.c_str()), alloc);
                 entJson.AddMember("layerId", (size_t)(entGen->layer->absolute_ref), alloc);
 
                 if (type == DWG_TYPE_LINE)
