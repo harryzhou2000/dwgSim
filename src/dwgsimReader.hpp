@@ -314,6 +314,16 @@ namespace DwgSim
                     __FILL_RAPIDJSON_FIELD_DOUBLE(radius)
                     __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
                 }
+                if (type == DWG_TYPE_ELLIPSE)
+                {
+                    auto ent = dwg_object_to_ELLIPSE(obj);
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(center)
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(sm_axis)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(axis_ratio)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(start_angle)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(end_angle)
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
+                }
                 if (type == DWG_TYPE_POLYLINE_3D)
                 {
                     auto ent = dwg_object_to_POLYLINE_3D(obj);
