@@ -155,17 +155,17 @@ namespace DwgSim
         }
 
         void TraverseEntitiesInSpace(
-            std::function<void(Dwg_Object *, const ObjectName &, Dwg_Object_Type)> process_object,
+            std::function<void(Dwg_Object *, Dwg_Object *, const ObjectName &, Dwg_Object_Type)> process_object,
             EntitySpaceType space)
         {
-            auto process_object_type = [&](Dwg_Object *obj, EntitySpaceType space)
+            auto process_object_type = [&](Dwg_Object *blk_obj, Dwg_Object *obj, EntitySpaceType space)
             {
                 if (!obj || !obj->parent)
                     throw std::runtime_error("obj not valid");
                 uint32_t type = obj->fixedtype;
                 if (objNameMapping.map.count((Dwg_Object_Type)type))
                 {
-                    process_object(obj, objNameMapping.map.at((Dwg_Object_Type)type), (Dwg_Object_Type)type);
+                    process_object(blk_obj, obj, objNameMapping.map.at((Dwg_Object_Type)type), (Dwg_Object_Type)type);
                 }
                 else
                 {
@@ -181,7 +181,7 @@ namespace DwgSim
                 Dwg_Object *obj = get_first_owned_entity(ref->obj);
                 while (obj)
                 {
-                    process_object_type(obj, space);
+                    process_object_type(ref->obj, obj, space);
                     obj = get_next_owned_entity(ref->obj, obj);
                 }
             };
@@ -231,7 +231,7 @@ namespace DwgSim
         void DebugPrint1()
         {
             TraverseEntitiesInSpace(
-                [&](Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
+                [&](Dwg_Object *blk_obj, Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
                 {
                     int err{0};
                     auto entGen = dwg_object_to_entity(obj, &err);
@@ -288,7 +288,7 @@ namespace DwgSim
                 doc.AddMember("modelSpaceEntities", modelSpaceArr, doc.GetAllocator());
             }
             auto &modelSpaceArr = doc["modelSpaceEntities"];
-            auto process_object = [&](Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
+            auto process_object = [&](Dwg_Object *blk_obj, Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
             {
                 rapidjson::Value entJson(rapidjson::kObjectType);
                 fillEntityJson(obj, name, type, entJson);
@@ -305,69 +305,39 @@ namespace DwgSim
             }
             auto &blocks = doc["blocks"];
 
-            auto process_BLOCK_HEADER = [&](Dwg_Object_Ref *ref, EntitySpaceType space)
+            auto process_object = [&](Dwg_Object *blk_obj, Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
             {
                 int err{0};
-                if (!ref)
-                    return;
-                if (!ref->obj)
-                    return;
-                auto block_hdr = dwg_object_to_BLOCK_HEADER(ref->obj);
-
-                rapidjson::Value blockJson(rapidjson::kObjectType);
-                blockJson.AddMember("id", ref->obj->handle.value, doc.GetAllocator());
-                blockJson.AddMember("blkisxref", block_hdr->blkisxref, doc.GetAllocator());
-                char *blockName = dwg_obj_block_header_get_name(block_hdr, &err);
+                auto blk_id = blk_obj->handle.value;
+                auto blk_id_name = std::to_string(blk_id);
+                if (!blocks.HasMember(blk_id_name.c_str()))
                 {
-                    rapidjson::Value strJson;
-                    strJson.SetString((blockName), ((int)std::strlen(blockName)), doc.GetAllocator());
-                    blockJson.AddMember("name", strJson, doc.GetAllocator());
-                }
-                if (IS_FROM_TU_DWG((&dwg)))
-                    free(blockName);
-
-                {
-                    rapidjson::Value blockEntJson(rapidjson::kArrayType); // todo: doing reserve
-
-                    auto process_object = [&](Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
+                    rapidjson::Value blk_id_nameJson;
+                    blk_id_nameJson.SetString(blk_id_name.c_str(), doc.GetAllocator());
+                    blocks.AddMember(blk_id_nameJson, rapidjson::Value(rapidjson::kObjectType), doc.GetAllocator());
+                    auto &blockJson = blocks[blk_id_name.c_str()];
+                    auto block_hdr = dwg_object_to_BLOCK_HEADER(blk_obj);
+                    blockJson.AddMember("blkisxref", block_hdr->blkisxref, doc.GetAllocator());
+                    blockJson.AddMember("id", blk_id, doc.GetAllocator());
+                    char *blockName = dwg_obj_block_header_get_name(block_hdr, &err);
                     {
-                        rapidjson::Value entJson(rapidjson::kObjectType);
-                        fillEntityJson(obj, name, type, entJson);
-                        blockEntJson.PushBack(entJson, doc.GetAllocator());
-                    };
-
-                    auto process_object_type = [&](Dwg_Object *obj, EntitySpaceType space)
-                    {
-                        if (!obj || !obj->parent)
-                            throw std::runtime_error("obj not valid");
-                        uint32_t type = obj->fixedtype;
-                        if (objNameMapping.map.count((Dwg_Object_Type)type))
-                        {
-                            process_object(obj, objNameMapping.map.at((Dwg_Object_Type)type), (Dwg_Object_Type)type);
-                        }
-                        else
-                        {
-                            if (type >= DWG_TYPE_ACDSRECORD)
-                                return;
-                            throw unhandled_class_error("DWG Class: " + std::to_string(type));
-                        }
-                    };
-
-                    Dwg_Object *obj = get_first_owned_entity(ref->obj);
-                    while (obj)
-                    {
-                        process_object_type(obj, space);
-                        obj = get_next_owned_entity(ref->obj, obj);
+                        rapidjson::Value strJson;
+                        strJson.SetString((blockName), ((int)std::strlen(blockName)), doc.GetAllocator());
+                        blockJson.AddMember("name", strJson, doc.GetAllocator());
                     }
-                    blockJson.AddMember("blockEntities", blockEntJson, doc.GetAllocator());
+                    if (IS_FROM_TU_DWG((&dwg)))
+                        free(blockName);
+
+                    blockJson.AddMember("entities", rapidjson::kArrayType, doc.GetAllocator());
                 }
-                rapidjson::Value idStr;
-                idStr.SetString(std::to_string(ref->obj->handle.value).c_str(), doc.GetAllocator());
-                blocks.AddMember(idStr, blockJson, doc.GetAllocator());
+                auto &blockJson = blocks[blk_id_name.c_str()];
+                auto &blockEntJson = blockJson["entities"];
+
+                rapidjson::Value entJson(rapidjson::kObjectType);
+                fillEntityJson(obj, name, type, entJson);
+                blockEntJson.PushBack(entJson, doc.GetAllocator());
             };
-            Dwg_Object_BLOCK_CONTROL *block_control = dwg_block_control(&dwg);
-            for (int i = 0; i < block_control->num_entries; i++)
-                process_BLOCK_HEADER(block_control->entries[i], BlockSpace);
+            TraverseEntitiesInSpace(process_object, BlockSpace);
         }
 
         void fillEntityJson(Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type, rapidjson::Value &entJson)

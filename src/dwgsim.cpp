@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
             reader.PrintDoc(o, 2);
         }
         else 
-            reader.PrintDoc(std::cout, 2);
+            reader.PrintDoc(std::cout, 0);
     }
     catch (const std::exception &err)
     {
