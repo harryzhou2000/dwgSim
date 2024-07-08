@@ -11,6 +11,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <string>
 
 namespace DwgSim
 {
@@ -115,17 +116,18 @@ namespace DwgSim
 
         void recordLayerName(dwg_obj_ent *entGen)
         {
-            if (layerNames.count(entGen->layer->absolute_ref))
+            auto layerId = entGen->layer->absolute_ref;
+            if (layerNames.count(layerId))
                 return;
             int err{0};
             auto layer_name = dwg_ent_get_layer_name(entGen, &err);
             if (err)
                 throw field_query_error("dwg_ent_get_layer_name failed");
             if (layer_name)
-                layerNames[entGen->layer->absolute_ref] = LayerRecord{layerNames.size(), layer_name};
+                layerNames[layerId] = LayerRecord{layerNames.size(), layer_name};
             else
-                layerNames[entGen->layer->absolute_ref] = LayerRecord{layerNames.size(), "UNKNOWN_LAYER"};
-            if (IS_FROM_TU_DWG((&dwg))) //!
+                layerNames[layerId] = LayerRecord{layerNames.size(), "UNKNOWN_LAYER"};
+            if (IS_FROM_TU_DWG((&dwg)) && std::string(layer_name) != "0") //!
                 free(layer_name);
         }
 
@@ -277,6 +279,16 @@ namespace DwgSim
     {                                               \
         entJson.AddMember(#name, ent->name, alloc); \
     }
+#define __FILL_RAPIDJSON_FIELD_INT(name)                     \
+    {                                                        \
+        entJson.AddMember(#name, int32_t(ent->name), alloc); \
+    }
+#define __FILL_RAPIDJSON_FIELD_STRING(str, len)     \
+    {                                               \
+        rapidjson::Value strJson;                   \
+        strJson.SetString((##str), (##len), alloc); \
+        entJson.AddMember(#str, strJson, alloc);    \
+    }
             auto traverseHandler = [&](Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type)
             {
                 rapidjson::Document::AllocatorType &alloc = doc.GetAllocator();
@@ -397,6 +409,74 @@ namespace DwgSim
                     entJson.AddMember("vertex", vertsJson, alloc);
                     entJson.AddMember("bulge", bulgesJson, alloc);
 
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
+                }
+                if (type == DWG_TYPE_SPLINE)
+                {
+                    auto ent = dwg_object_to_SPLINE(obj);
+                    auto entP = ent;
+                    __FILL_RAPIDJSON_FIELD_INT(splineflags)
+                    __FILL_RAPIDJSON_FIELD_INT(periodic)
+                    __FILL_RAPIDJSON_FIELD_INT(rational)
+                    __FILL_RAPIDJSON_FIELD_INT(weighted)
+                    __FILL_RAPIDJSON_FIELD_INT(knotparam)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(ctrl_tol)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(fit_tol)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(knot_tol)
+                    __FILL_RAPIDJSON_FIELD_INT(degree)
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(beg_tan_vec)
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(end_tan_vec)
+
+                    rapidjson::Value ctrlPtsJson(rapidjson::kArrayType);
+                    rapidjson::Value fitPtsJson(rapidjson::kArrayType);
+                    rapidjson::Value knotsJson(rapidjson::kArrayType);
+                    ctrlPtsJson.Reserve(ent->num_ctrl_pts, alloc);
+                    fitPtsJson.Reserve(ent->num_fit_pts, alloc);
+                    knotsJson.Reserve(ent->num_knots, alloc);
+
+                    for (uint32_t i = 0; i < ent->num_ctrl_pts; i++)
+                    {
+                        rapidjson::Value point(rapidjson::kArrayType);
+                        point.Reserve(4, alloc);
+                        point.PushBack(ent->ctrl_pts[i].x, alloc);
+                        point.PushBack(ent->ctrl_pts[i].y, alloc);
+                        point.PushBack(ent->ctrl_pts[i].z, alloc);
+                        point.PushBack(ent->ctrl_pts[i].w, alloc);
+                        ctrlPtsJson.PushBack(point, alloc);
+                    }
+                    for (uint32_t i = 0; i < ent->num_fit_pts; i++)
+                    {
+                        rapidjson::Value point(rapidjson::kArrayType);
+                        point.Reserve(3, alloc);
+                        point.PushBack(ent->fit_pts[i].x, alloc);
+                        point.PushBack(ent->fit_pts[i].y, alloc);
+                        point.PushBack(ent->fit_pts[i].z, alloc);
+                        fitPtsJson.PushBack(point, alloc);
+                    }
+                    for (uint32_t i = 0; i < ent->num_knots; i++)
+                    {
+                        knotsJson.PushBack(ent->knots[i], alloc);
+                    }
+
+                    entJson.AddMember("ctrl_pts", ctrlPtsJson, alloc);
+                    entJson.AddMember("fit_pts", fitPtsJson, alloc);
+                    entJson.AddMember("knots", knotsJson, alloc);
+                }
+                if (type == DWG_TYPE_INSERT)
+                {
+                    auto ent = dwg_object_to_INSERT(obj);
+                    entJson.AddMember("blockId", (size_t)(ent->block_header->absolute_ref), alloc);
+                    char *blockName = dwg_obj_block_header_get_name(dwg_object_to_BLOCK_HEADER(ent->block_header->obj), &err);
+                    __FILL_RAPIDJSON_FIELD_STRING(blockName, (int)std::strlen(blockName))
+                    if (IS_FROM_TU_DWG((&dwg)))
+                        free(blockName);
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(ins_pt)
+                    __FILL_RAPIDJSON_FIELD_VECTOR3(scale)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(rotation)
+                    __FILL_RAPIDJSON_FIELD_INT(num_cols)
+                    __FILL_RAPIDJSON_FIELD_INT(num_rows)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(col_spacing)
+                    __FILL_RAPIDJSON_FIELD_DOUBLE(row_spacing)
                     __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
                 }
 
