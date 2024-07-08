@@ -35,6 +35,7 @@ int main(int argc, char *argv[])
         reader.DebugPrint1();
 
         reader.CollectModelSpaceEntities();
+        reader.CollectBlockSpaceEntities();
         if (argparser.is_used("-o"))
         {
             auto o = std::ofstream(argparser.get("-o"));
