@@ -75,6 +75,7 @@ namespace DwgSim
             __MAP_NAME(LWPOLYLINE)
             map["POLYLINE_2D"] = "POLYLINE";
             map["POLYLINE_3D"] = "POLYLINE";
+            __MAP_NAME(INSERT)
 #undef __MAP_NAME
         }
     } objName2DxfNameMapping;
@@ -305,6 +306,14 @@ namespace DwgSim
                     auto block_hdr = dwg_object_to_BLOCK_HEADER(blk_obj);
                     blockJson.AddMember("blkisxref", block_hdr->blkisxref, doc.GetAllocator());
                     blockJson.AddMember("id", blk_id, doc.GetAllocator());
+                    blockJson.AddMember("endBlkId", block_hdr->endblk_entity->absolute_ref, doc.GetAllocator());
+                    uint32_t blk_flag = 0;
+                    blk_flag |= block_hdr->anonymous ? (1 << 0) : 0;
+                    blk_flag |= block_hdr->hasattrs ? (1 << 1) : 0;
+                    blk_flag |= block_hdr->blkisxref ? (1 << 2) : 0;
+                    blk_flag |= block_hdr->xrefoverlaid ? (1 << 3) : 0;
+                    // ! extracted from libredwg logic
+                    blockJson.AddMember("flag", blk_flag, doc.GetAllocator());
                     char *blockName = dwg_obj_block_header_get_name(block_hdr, &err);
                     {
                         rapidjson::Value strJson;
@@ -313,6 +322,14 @@ namespace DwgSim
                     }
                     if (IS_FROM_TU_DWG((&dwg)))
                         free(blockName);
+                    {
+                        rapidjson::Value base_pt(rapidjson::kArrayType);
+                        base_pt.Reserve(3, doc.GetAllocator());
+                        base_pt.PushBack(block_hdr->base_pt.x, doc.GetAllocator());
+                        base_pt.PushBack(block_hdr->base_pt.y, doc.GetAllocator());
+                        base_pt.PushBack(block_hdr->base_pt.z, doc.GetAllocator());
+                        blockJson.AddMember("base_pt", base_pt, doc.GetAllocator());
+                    }
 
                     blockJson.AddMember("entities", rapidjson::kArrayType, doc.GetAllocator());
                 }
@@ -327,6 +344,8 @@ namespace DwgSim
         }
 
         void fillEntityJson(Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type, rapidjson::Value &entJson);
+
+        void outEntityDXF(std::ostream &o, rapidjson::Value &entJso);
 
         ~Reader()
         {
