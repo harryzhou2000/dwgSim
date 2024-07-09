@@ -120,15 +120,70 @@ namespace DwgSim
             if (layerNames.count(layerId))
                 return;
             int err{0};
-            auto layer_name = dwg_ent_get_layer_name(entGen, &err);
-            if (err)
-                throw field_query_error("dwg_ent_get_layer_name failed");
-            if (layer_name)
-                layerNames[layerId] = LayerRecord{layerNames.size(), layer_name};
-            else
-                layerNames[layerId] = LayerRecord{layerNames.size(), "UNKNOWN_LAYER"};
-            if (IS_FROM_TU_DWG((&dwg)) && std::string(layer_name) != "0") //!
-                free(layer_name);
+            std::string layer_name_str;
+            {
+                auto layer_name = dwg_ent_get_layer_name(entGen, &err);
+                if (err)
+                    throw field_query_error("dwg_ent_get_layer_name failed");
+                if (layer_name)
+                    layer_name_str = layer_name;
+                else
+                    layer_name_str = "UNKNOWN_LAYER";
+                if (layer_name)
+                    if (IS_FROM_TU_DWG((&dwg)) && std::string(layer_name) != "0") //!
+                        free(layer_name);
+            }
+            layerNames[layerId] = LayerRecord{layerNames.size(), layer_name_str};
+
+            //* also fill the json
+
+            auto &alloc = doc.GetAllocator();
+            if (!doc.HasMember("layers"))
+                doc.AddMember("layers", rapidjson::Value(rapidjson::kObjectType), alloc);
+
+            {
+                rapidjson::Value layerIdStr;
+                layerIdStr.SetString(std::to_string(layerId).c_str(), alloc);
+                doc["layers"].AddMember(layerIdStr, rapidjson::Value(rapidjson::kObjectType), alloc);
+            }
+            auto &layerJson = doc["layers"][std::to_string(layerId).c_str()];
+
+            auto layer = dwg_object_to_LAYER(entGen->layer->obj);
+            {
+                rapidjson::Value tmpStr;
+                tmpStr.SetString(layer_name_str.c_str(), alloc);
+                layerJson.AddMember("name", tmpStr, alloc);
+            }
+            layerJson.AddMember("flag", layer->flag, alloc);
+            layerJson.AddMember("plotflag", layer->plotflag, alloc);
+            layerJson.AddMember("linewt", layer->linewt, alloc);
+            layerJson.AddMember("ltype", rapidjson::Value(rapidjson::kObjectType), alloc);
+            std::string ltype_name_str;
+            {
+                auto ltype_name = dwg_obj_table_get_name(layer->ltype->obj, &err);
+                if (err)
+                    throw field_query_error("dwg_ent_get_layer_name failed");
+                if (ltype_name)
+                    ltype_name_str = ltype_name;
+                else
+                    ltype_name_str = "UNKNOWN_LTYPE";
+                if (ltype_name)
+                    if (IS_FROM_TU_DWG((&dwg))) //!
+                        free(ltype_name);
+
+                auto ltype = dwg_object_to_LTYPE(layer->ltype->obj);
+
+                {
+                    rapidjson::Value tmpStr;
+                    tmpStr.SetString(ltype_name_str.c_str(), alloc);
+                    layerJson["ltype"].AddMember("name", tmpStr, alloc);
+                }
+            }
+            layerJson.AddMember("color", rapidjson::Value(rapidjson::kObjectType), alloc);
+            {
+                auto &colorJson = layerJson["color"];
+                colorJson.AddMember("index", (int)layer->color.index, alloc);
+            }
         }
 
         void TraverseEntities(std::function<void(Dwg_Object *, EntitySpaceType)> process_object);
@@ -187,7 +242,6 @@ namespace DwgSim
                 },
                 ModelSpace);
         }
-
 
         void CollectModelSpaceEntities()
         {
