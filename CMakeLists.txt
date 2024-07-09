@@ -46,7 +46,12 @@ set(DWGSIM_EXTERNAL_INCLUDES ${DWGSIM_EXTERNAL_INCLUDES}
     CACHE INTERNAL "dwgsim external")
 
 
-add_executable(dwgsim ${CMAKE_SOURCE_DIR}/src/dwgsim.cpp)
+set(DWGSIM_CPPS ""
+src/dwgsim.cpp
+src/dwgsimReader.cpp
+)
+
+add_executable(dwgsim ${DWGSIM_CPPS})
 
 if(MSVC)
   set(redwg libredwg)

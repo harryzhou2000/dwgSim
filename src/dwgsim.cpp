@@ -1,5 +1,5 @@
 #include "dwgsimDefs.h"
-#include "dwgsimReader.hpp"
+#include "dwgsimReader.h"
 #include <fstream>
 
 int main(int argc, char *argv[])
