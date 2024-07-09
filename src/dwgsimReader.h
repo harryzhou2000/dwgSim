@@ -12,9 +12,12 @@
 #include <set>
 #include <unordered_map>
 #include <string>
+#include <cmath>
 
 namespace DwgSim
 {
+
+    const double pi = 3.141592653589793238462643;
 
 #define IS_FROM_TU_DWG(dwg) \
     (dwg->header.from_version >= R_2007) && !(dwg->opts & DWG_OPTS_IN)
@@ -41,6 +44,7 @@ namespace DwgSim
             __MAP_DWG_TYPE(ARC)
             __MAP_DWG_TYPE(SPLINE)
             __MAP_DWG_TYPE(CIRCLE)
+            __MAP_DWG_TYPE(ELLIPSE)
             __MAP_DWG_TYPE(LWPOLYLINE)
             __MAP_DWG_TYPE(POLYLINE_2D)
             __MAP_DWG_TYPE(POLYLINE_3D)
@@ -56,6 +60,24 @@ namespace DwgSim
 #undef __MAP_DWG_TYPE
         }
     } objNameMapping;
+
+    const struct __ObjName2DxfNameMapping
+    {
+        std::unordered_map<ObjectName, ObjectName> map;
+        __ObjName2DxfNameMapping()
+        {
+#define __MAP_NAME(NAME) map[#NAME] = #NAME;
+            __MAP_NAME(LINE)
+            __MAP_NAME(ARC)
+            __MAP_NAME(CIRCLE)
+            __MAP_NAME(ELLIPSE)
+            __MAP_NAME(SPLINE)
+            __MAP_NAME(LWPOLYLINE)
+            map["POLYLINE_2D"] = "POLYLINE";
+            map["POLYLINE_3D"] = "POLYLINE";
+#undef __MAP_NAME
+        }
+    } objName2DxfNameMapping;
 
     class unhandled_class_error : public std::runtime_error
     {
@@ -113,6 +135,8 @@ namespace DwgSim
                 doc.Accept(writer);
             }
         }
+
+        void PrintDocDXF(std::ostream &o);
 
         void recordLayerName(dwg_obj_ent *entGen)
         {

@@ -9,6 +9,7 @@ int main(int argc, char *argv[])
     argparse::ArgumentParser argparser("dwgsim", DNDS_MACRO_TO_STRING(DWGSIM_CURRENT_COMMIT_HASH));
     argparser.add_argument("input").help("path to the dwg input");
     argparser.add_argument("-o").help("path to output");
+    argparser.add_argument("-O").default_value("JSON").help("output format");
 
     try
     {
@@ -21,9 +22,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "reading from " << argparser.get("input") << std::endl;
+    std::cout << "reading from: " << argparser.get("input") << std::endl;
     if (argparser.is_used("-o"))
-        std::cout << "writing to" << argparser.get("-o") << std::endl;
+        std::cout << "writing to: " << argparser.get("-o") << std::endl;
     else
         std::cout << "writing to stdout" << std::endl;
     std::string filename_in = argparser.get("input");
@@ -32,17 +33,33 @@ int main(int argc, char *argv[])
     {
         DwgSim::Reader reader(filename_in);
         // reader.DebugPrint();
-        reader.DebugPrint1();
+        // reader.DebugPrint1();
 
         reader.CollectModelSpaceEntities();
         reader.CollectBlockSpaceEntities();
-        if (argparser.is_used("-o"))
+
+        if (argparser.get("-O") == "JSON")
         {
-            auto o = std::ofstream(argparser.get("-o"));
-            reader.PrintDoc(o, 2);
+            if (argparser.is_used("-o"))
+            {
+                auto o = std::ofstream(argparser.get("-o"));
+                reader.PrintDoc(o, 2);
+            }
+            else
+                reader.PrintDoc(std::cout, 2);
         }
-        else 
-            reader.PrintDoc(std::cout, 2);
+        else if (argparser.get("-O") == "DXF")
+        {
+            if (argparser.is_used("-o"))
+            {
+                auto o = std::ofstream(argparser.get("-o"));
+                reader.PrintDocDXF(o);
+            }
+            else
+                reader.PrintDocDXF(std::cout);
+        }
+        else
+            throw std::runtime_error("no such -O format choice");
     }
     catch (const std::exception &err)
     {

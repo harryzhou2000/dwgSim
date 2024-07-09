@@ -1,6 +1,5 @@
 #include "dwgsimReader.h"
 
-
 namespace DwgSim
 {
 
@@ -70,6 +69,204 @@ namespace DwgSim
                 process_BLOCK_HEADER(block_control->entries[i], BlockSpace);
         }
     }
+#define __OUTPUT_SUBCLASS_NAME(name) \
+    o << "  100\n"                   \
+      << #name << "\n";
+#define __OUTPUT_ENTITY_VECTOR3(name, code0, codeJ) \
+    for (int i = 0; i < 3; i++)                     \
+        o << "  " << ##codeJ * i + ##code0 << "\n"  \
+          << entJson[#name][i].GetDouble() << "\n";
+#define __OUTPUT_ENTITY_DOUBLE(name, code) \
+    o << "  " << ##code << "\n"            \
+      << entJson[#name].GetDouble() << "\n";
+#define __OUTPUT_ENTITY_INT(name, code) \
+    o << "  " << ##code << "\n"         \
+      << entJson[#name].GetInt() << "\n";
+#define __EXTRUSION_IS_FINITE()                           \
+    (std::abs(entJson["extrusion"][0].GetDouble()) > 0 && \
+     std::abs(entJson["extrusion"][1].GetDouble()) > 0 && \
+     std::abs(entJson["extrusion"][2].GetDouble()) > 0)
+
+    void Reader::PrintDocDXF(std::ostream &o)
+    {
+        using std::dec;
+        using std::hex;
+        using std::nouppercase;
+        using std::uppercase;
+        using namespace std::string_literals;
+        const auto secStart = "  0\nSECTION\n";
+        const auto secEnd = "  0\nENDSEC\n";
+        o << "999\n";
+        o << "dwgSim\n";
+        o << std::setprecision(16);
+
+        o << secStart;
+        o << "  2\nHEADER\n";
+        o << "  9\n$ACADVER\n";
+        o << "  1\nAC1027\n";
+        o << "  9\n$HANDSEED\n";
+        o << "  5\n";
+        o << hex << uppercase << dwg.header_vars.HANDSEED->handleref.value << dec << nouppercase << "\n";
+        o << secEnd;
+
+        o << secStart;
+        o << "  2\nENTITIES\n";
+
+        auto &layersJson = doc["layers"];
+        for (int64_t i = 0; i < (int64_t)doc["modelSpaceEntities"].Size(); i++)
+        {
+            auto &entJson = doc["modelSpaceEntities"][i];
+
+            if (!objName2DxfNameMapping.map.count(entJson["type"].GetString()))
+                continue;
+
+            o << "  0\n"
+              << objName2DxfNameMapping.map.at(entJson["type"].GetString()) << "\n";
+            o << "  5 \n"
+              << hex << uppercase << entJson["handle"].GetUint64() << dec << nouppercase << "\n";
+            __OUTPUT_SUBCLASS_NAME(AcDbEntity)
+            auto &layerJson = layersJson[std::to_string(entJson["layerId"].GetUint64()).c_str()];
+            o << "  8\n"
+              << layerJson["name"].GetString() << "\n";
+
+            auto type = entJson["type"].GetString();
+            if (type == "LINE"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbLine)
+                __OUTPUT_ENTITY_VECTOR3(start, 10, 10)
+                __OUTPUT_ENTITY_VECTOR3(end, 11, 10)
+                if (__EXTRUSION_IS_FINITE())
+                    __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
+            }
+            if (type == "ARC"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbArc)
+                __OUTPUT_ENTITY_VECTOR3(center, 10, 10)
+                __OUTPUT_ENTITY_DOUBLE(radius, 40)
+                o << "  " << 50 << "\n"
+                  << entJson["start_angle"].GetDouble() * 180. / pi << "\n";
+                o << "  " << 51 << "\n"
+                  << entJson["end_angle"].GetDouble() * 180. / pi << "\n"; //! in degree
+                if (__EXTRUSION_IS_FINITE())
+                    __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
+            }
+            if (type == "CIRCLE"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbCircle)
+                __OUTPUT_ENTITY_VECTOR3(center, 10, 10)
+                __OUTPUT_ENTITY_DOUBLE(radius, 40)
+                if (__EXTRUSION_IS_FINITE())
+                    __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
+            }
+            if (type == "ELLIPSE"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbEllipse)
+                __OUTPUT_ENTITY_VECTOR3(center, 10, 10)
+                __OUTPUT_ENTITY_VECTOR3(sm_axis, 11, 10)
+                __OUTPUT_ENTITY_DOUBLE(axis_ratio, 40)
+                __OUTPUT_ENTITY_DOUBLE(start_angle, 41)
+                __OUTPUT_ENTITY_DOUBLE(end_angle, 42) //! in radius
+                if (__EXTRUSION_IS_FINITE())
+                    __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
+            }
+            if (type == "POLYLINE_3D"s || type == "POLYLINE_2D"s)
+            {
+                if (type == "POLYLINE_3D"s)
+                    __OUTPUT_SUBCLASS_NAME(AcDb3dPolyline)
+                else
+                    __OUTPUT_SUBCLASS_NAME(AcDb2dPolyline)
+                o << "  10\n0\n  20\n0\n";
+                o << "  30\n"
+                  << 0 << "\n"; //? elevation is what
+                __OUTPUT_ENTITY_INT(flag, 70)
+                for (int64_t i = 0; i < (int64_t)entJson["vertex"].Size(); i++)
+                {
+                    o << "  0\n"
+                      << "VERTEX" << "\n";
+                    o << "  5 \n"
+                      << hex << uppercase << entJson["vertexHandles"][i].GetUint64() << dec << nouppercase << "\n";
+                    __OUTPUT_SUBCLASS_NAME(AcDbEntity)
+                    o << "  8\n"
+                      << layerJson["name"].GetString() << "\n"; // forcing to use polyline's layer
+                    __OUTPUT_SUBCLASS_NAME(AcDbVertex)
+                    if (type == "POLYLINE_3D"s)
+                        __OUTPUT_SUBCLASS_NAME(AcDb3dPolylineVertex)
+                    else
+                        __OUTPUT_SUBCLASS_NAME(AcDb2dVertex)
+                    for (int j = 0; j < 3; j++)
+                        o << "  " << 10 * j + 10 << "\n"
+                          << entJson["vertex"][i][j].GetDouble() << "\n";
+                    if (type == "POLYLINE_2D"s)
+                        o << "  42\n"
+                          << entJson["bulge"][i].GetDouble() << "\n";
+                    if (type == "POLYLINE_3D"s)
+                        o << "  70\n32\n";
+                    else
+                        o << "  70\n0\n"; //! not verified
+                }
+                o << "  0\n"
+                  << "SEQEND" << "\n";
+                o << "  5 \n"
+                  << hex << uppercase << entJson["seqendHandle"].GetUint64() << dec << nouppercase << "\n";
+                __OUTPUT_SUBCLASS_NAME(AcDbEntity)
+                o << "  8\n"
+                  << layerJson["name"].GetString() << "\n"; // forcing to use polyline's layer
+            }
+            if (type == "LWPOLYLINE"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbPolyline)
+                o << "  90\n"
+                  << entJson["vertex"].Size() << "\n";
+                __OUTPUT_ENTITY_INT(flag, 70)
+                for (int64_t i = 0; i < (int64_t)entJson["vertex"].Size(); i++)
+                    o << "  10\n"
+                      << entJson["vertex"][i][0].GetDouble() << "\n"
+                      << "  20\n"
+                      << entJson["vertex"][i][1].GetDouble() << "\n";
+                for (int64_t i = 0; i < (int64_t)entJson["bulge"].Size(); i++)
+                    o << "  42\n"
+                      << entJson["bulge"][i].GetDouble() << "\n";
+                if (__EXTRUSION_IS_FINITE())
+                    __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
+            }
+            if (type == "SPLINE"s)
+            {
+                __OUTPUT_SUBCLASS_NAME(AcDbSpline)
+                o << "  210\n0\n  220\n0\n  230\n1\n"; // cant read extrusion, where?
+                o << "  2\nANSI31\n";
+                __OUTPUT_ENTITY_INT(flag, 70) // no using splineflags
+                __OUTPUT_ENTITY_INT(degree, 71)
+                o << "  72\n"
+                  << entJson["knots"].Size() << "\n";
+                o << "  73\n"
+                  << entJson["ctrl_pts"].Size() << "\n";
+                o << "  74\n"
+                  << entJson["fit_pts"].Size() << "\n";
+                __OUTPUT_ENTITY_DOUBLE(knot_tol, 42)
+                __OUTPUT_ENTITY_DOUBLE(ctrl_tol, 43)
+                __OUTPUT_ENTITY_DOUBLE(fit_tol, 44)
+
+                for (int64_t i = 0; i < (int64_t)entJson["knots"].Size(); i++)
+                    o << "  40\n"
+                      << entJson["knots"][i].GetDouble() << "\n";
+                for (int64_t i = 0; i < (int64_t)entJson["ctrl_pts"].Size(); i++)
+                    for (int j = 0; j < 3; j++)
+                        o << "  " << 10 * j + 10 << "\n"
+                          << entJson["ctrl_pts"][i][j].GetDouble() << "\n";
+                for (int64_t i = 0; i < (int64_t)entJson["fit_pts"].Size(); i++)
+                    for (int j = 0; j < 3; j++)
+                        o << "  " << 10 * j + 11 << "\n"
+                          << entJson["fit_pts"][i][j].GetDouble() << "\n";
+
+                for (int64_t i = 0; i < (int64_t)entJson["ctrl_pts"].Size(); i++)
+                    o << "  " << 41 << "\n" // for weights
+                      << entJson["ctrl_pts"][i][3].GetDouble() << "\n";
+            }
+        }
+
+        o << secEnd;
+        o << "  0\nEOF\n";
+    }
 
 #define __CREATE_RAPIDJSON_FIELD_VECTOR3(name)    \
                                                   \
@@ -115,6 +312,7 @@ namespace DwgSim
         recordLayerName(entGen);
 
         entJson.AddMember("type", rapidjson::GenericStringRef<char>(name.c_str()), alloc);
+        entJson.AddMember("handle", (size_t)(obj->handle.value), alloc);
         entJson.AddMember("layerId", (size_t)(entGen->layer->absolute_ref), alloc);
 
         if (type == DWG_TYPE_LINE)
@@ -154,11 +352,14 @@ namespace DwgSim
         {
             auto ent = dwg_object_to_POLYLINE_3D(obj);
             auto entP = ent;
+            __FILL_RAPIDJSON_FIELD_INT(flag)
 
             rapidjson::Value vertsJson(rapidjson::kArrayType);
             rapidjson::Value bulgesJson(rapidjson::kArrayType);
+            rapidjson::Value vertHandlesJson(rapidjson::kArrayType);
             vertsJson.Reserve(ent->num_owned, alloc);
             bulgesJson.Reserve(ent->num_owned, alloc);
+            vertHandlesJson.Reserve(ent->num_owned, alloc);
             if (ent->has_vertex)
             {
                 for (uint32_t i = 0; i < ent->num_owned; i++)
@@ -167,10 +368,13 @@ namespace DwgSim
                     __CREATE_RAPIDJSON_FIELD_VECTOR3(point)
                     vertsJson.PushBack(point, alloc);
                     bulgesJson.PushBack(0, alloc);
+                    vertHandlesJson.PushBack(entP->vertex[i]->obj->handle.value, alloc);
                 }
             }
             entJson.AddMember("vertex", vertsJson, alloc);
             entJson.AddMember("bulge", bulgesJson, alloc);
+            entJson.AddMember("vertexHandles", vertHandlesJson, alloc);
+            entJson.AddMember("seqendHandle", ent->seqend->absolute_ref, alloc);
 
             __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
         }
@@ -178,11 +382,14 @@ namespace DwgSim
         {
             auto ent = dwg_object_to_POLYLINE_2D(obj);
             auto entP = ent;
+            __FILL_RAPIDJSON_FIELD_INT(flag)
 
             rapidjson::Value vertsJson(rapidjson::kArrayType);
             rapidjson::Value bulgesJson(rapidjson::kArrayType);
+            rapidjson::Value vertHandlesJson(rapidjson::kArrayType);
             vertsJson.Reserve(ent->num_owned, alloc);
             bulgesJson.Reserve(ent->num_owned, alloc);
+            vertHandlesJson.Reserve(ent->num_owned, alloc);
             if (ent->has_vertex)
             {
                 for (uint32_t i = 0; i < ent->num_owned; i++)
@@ -191,10 +398,13 @@ namespace DwgSim
                     __CREATE_RAPIDJSON_FIELD_VECTOR3(point)
                     vertsJson.PushBack(point, alloc);
                     bulgesJson.PushBack(ent->bulge, alloc);
+                    vertHandlesJson.PushBack(entP->vertex[i]->obj->handle.value, alloc);
                 }
             }
             entJson.AddMember("vertex", vertsJson, alloc);
             entJson.AddMember("bulge", bulgesJson, alloc);
+            entJson.AddMember("vertexHandles", vertHandlesJson, alloc);
+            entJson.AddMember("seqendHandle", ent->seqend->absolute_ref, alloc);
 
             __FILL_RAPIDJSON_FIELD_VECTOR3(extrusion)
         }
@@ -202,6 +412,7 @@ namespace DwgSim
         {
             auto ent = dwg_object_to_LWPOLYLINE(obj);
             auto entP = ent;
+            __FILL_RAPIDJSON_FIELD_INT(flag)
 
             rapidjson::Value vertsJson(rapidjson::kArrayType);
             rapidjson::Value bulgesJson(rapidjson::kArrayType);
@@ -229,6 +440,7 @@ namespace DwgSim
         {
             auto ent = dwg_object_to_SPLINE(obj);
             auto entP = ent;
+            __FILL_RAPIDJSON_FIELD_INT(flag)
             __FILL_RAPIDJSON_FIELD_INT(splineflags)
             __FILL_RAPIDJSON_FIELD_INT(periodic)
             __FILL_RAPIDJSON_FIELD_INT(rational)
@@ -255,7 +467,7 @@ namespace DwgSim
                 point.PushBack(ent->ctrl_pts[i].x, alloc);
                 point.PushBack(ent->ctrl_pts[i].y, alloc);
                 point.PushBack(ent->ctrl_pts[i].z, alloc);
-                point.PushBack(ent->ctrl_pts[i].w, alloc);
+                point.PushBack(ent->ctrl_pts[i].w, alloc); // weights here
                 ctrlPtsJson.PushBack(point, alloc);
             }
             for (uint32_t i = 0; i < ent->num_fit_pts; i++)
