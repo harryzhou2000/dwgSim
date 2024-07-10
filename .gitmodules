@@ -8,3 +8,7 @@
 [submodule "externalSrc/libredwg"]
 	path = externalSrc/libredwg
 	url = https://github.com/LibreDWG/libredwg
+[submodule "externalSrc/eigen"]
+	path = externalSrc/eigen
+	url = https://gitlab.com/libeigen/eigen.git
+	branch = 3.4

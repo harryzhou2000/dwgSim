@@ -35,3 +35,5 @@ demo/drawDwgSimJson.py OutputJson.json
 A single class in `dwgsimReader` now handles the extraction of data from the libreDWG dwg object.
 
 The CollectModelSpaceEntities() method is the primary translation process.
+
+See [notes](notes.md).

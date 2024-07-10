@@ -535,6 +535,8 @@ namespace DwgSim
             __OUTPUT_ENTITY_DOUBLE(knot_tol, 42)
             __OUTPUT_ENTITY_DOUBLE(ctrl_tol, 43)
             __OUTPUT_ENTITY_DOUBLE(fit_tol, 44)
+            __OUTPUT_ENTITY_VECTOR3(beg_tan_vec, 12, 10)
+            __OUTPUT_ENTITY_VECTOR3(end_tan_vec, 13, 10)
 
             for (int64_t i = 0; i < (int64_t)entJson["knots"].Size(); i++)
                 o << "  40\n"
@@ -551,6 +553,8 @@ namespace DwgSim
             for (int64_t i = 0; i < (int64_t)entJson["ctrl_pts"].Size(); i++)
                 o << "  " << 41 << "\n" // for weights
                   << entJson["ctrl_pts"][i][3].GetDouble() << "\n";
+            if (__EXTRUSION_IS_FINITE())
+                __OUTPUT_ENTITY_VECTOR3(extrusion, 210, 10)
         }
         else if (type == "INSERT"s)
         {

@@ -22,10 +22,11 @@ if(DWGSIM_RECORD_COMMIT)
 endif()
 
 find_path(DWGSIM_EXTERNAL_INCLUDE_ARGPARSE argparse REQUIRED PATHS
-    externalSrc/argparse/include) # hear-only, no build
+    externalSrc/argparse/include NO_DEFAULT_PATH) # hear-only, no build
 find_path(DWGSIM_EXTERNAL_INCLUDE_RAPIDJSON rapidjson REQUIRED PATHS
-    externalSrc/rapidjson/include) # hear-only, no build
-
+    externalSrc/rapidjson/include NO_DEFAULT_PATH) # hear-only, no build
+find_path(DWGSIM_EXTERNAL_INCLUDE_EIGEN Eigen REQUIRED  PATHS
+    externalSrc/eigen NO_DEFAULT_PATH) # hear-only, no build
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "libredwg shared")
 set(LIBREDWG_LIBONLY ON CACHE BOOL "libredwg libonly")
@@ -43,6 +44,7 @@ set(DWGSIM_EXTERNAL_INCLUDES ${DWGSIM_EXTERNAL_INCLUDES}
     ${DWGSIM_EXTERNAL_INCLUDE_LIBREDWG}
     ${DWGSIM_EXTERNAL_INCLUDE_ARGPARSE}
     ${DWGSIM_EXTERNAL_INCLUDE_RAPIDJSON}
+    ${DWGSIM_EXTERNAL_INCLUDE_EIGEN}
     CACHE INTERNAL "dwgsim external")
 
 
