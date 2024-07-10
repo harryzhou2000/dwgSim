@@ -38,7 +38,7 @@ find_path(DWGSIM_EXTERNAL_INCLUDE_LIBREDWG dwg.h REQUIRED PATHS
 
 
 
-set(DWGSIM_EXTERNAL_INCLUDES "")
+set(DWGSIM_EXTERNAL_INCLUDES src)
 
 set(DWGSIM_EXTERNAL_INCLUDES ${DWGSIM_EXTERNAL_INCLUDES}
     ${DWGSIM_EXTERNAL_INCLUDE_LIBREDWG}
@@ -49,11 +49,16 @@ set(DWGSIM_EXTERNAL_INCLUDES ${DWGSIM_EXTERNAL_INCLUDES}
 
 
 set(DWGSIM_CPPS ""
-src/dwgsim.cpp
 src/dwgsimReader.cpp
 )
 
-add_executable(dwgsim ${DWGSIM_CPPS})
+add_executable(dwgsim src/dwgsim.cpp ${DWGSIM_CPPS})
+
+add_executable(testSplineConversion test/testSplineConversion.cpp ${DWGSIM_CPPS})
+
+set(exeTargets dwgsim
+testSplineConversion
+)
 
 if(MSVC)
   set(redwg libredwg)
@@ -61,6 +66,11 @@ if(MSVC)
 else()
   set(redwg redwg)
 endif()
-target_link_libraries(dwgsim PUBLIC ${redwg})
-target_include_directories(dwgsim PUBLIC  ${DWGSIM_EXTERNAL_INCLUDES})
-target_compile_definitions(dwgsim PUBLIC DWGSIM_CURRENT_COMMIT_HASH=${DWGSIM_RECORDED_COMMIT_HASH})
+
+foreach(t IN LISTS exeTargets)
+    message(STATUS ${t})
+    target_link_libraries(${t} PUBLIC ${redwg})
+    target_include_directories(${t} PUBLIC  ${DWGSIM_EXTERNAL_INCLUDES})
+    target_compile_definitions(${t} PUBLIC DWGSIM_CURRENT_COMMIT_HASH=${DWGSIM_RECORDED_COMMIT_HASH})
+endforeach()
+

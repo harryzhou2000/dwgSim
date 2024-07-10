@@ -80,20 +80,6 @@ namespace DwgSim
         }
     } objName2DxfNameMapping;
 
-    class unhandled_class_error : public std::runtime_error
-    {
-    public:
-        using t_base = std::runtime_error;
-        using t_base::t_base;
-    };
-
-    class field_query_error : public std::runtime_error
-    {
-    public:
-        using t_base = std::runtime_error;
-        using t_base::t_base;
-    };
-
     struct LayerRecord
     {
         size_t readId = 0;

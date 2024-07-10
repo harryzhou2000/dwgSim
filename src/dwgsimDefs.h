@@ -15,3 +15,26 @@
 #ifndef DWGSIM_CURRENT_COMMIT_HASH
 #define DWGSIM_CURRENT_COMMIT_HASH SECTION_UNKNOWN
 #endif
+
+namespace DwgSim
+{
+    class unhandled_class_error : public std::runtime_error
+    {
+    public:
+        using t_base = std::runtime_error;
+        using t_base::t_base;
+    };
+
+    class field_query_error : public std::runtime_error
+    {
+    public:
+        using t_base = std::runtime_error;
+        using t_base::t_base;
+    };
+
+    class numerical_error : public std::runtime_error
+    {
+        using t_base = std::runtime_error;
+        using t_base::t_base;
+    };
+}

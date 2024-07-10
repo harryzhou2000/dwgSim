@@ -1,5 +1,7 @@
+
 #include "dwgsimDefs.h"
 #include "dwgsimReader.h"
+#include "splineUtil.h"
 #include <fstream>
 
 int main(int argc, char *argv[])
