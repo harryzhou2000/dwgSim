@@ -1,6 +1,5 @@
 # DwgSim Notes
 
-
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
@@ -20,8 +19,6 @@
     - [INSERT](#insert)
 
 <!-- /code_chunk_output -->
-
-
 
 ## Examination Process
 
@@ -292,9 +289,9 @@ $$
 If the `splineflags`'s 3rd bit indicates the fitting line is closed (```splineflags & 0x04 == true``` ), periodic BC must be used instead:
 $$
 \begin{aligned}
-\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_0} & = 
+\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_0} & =
 \frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_{N}} \\
-\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_0} & = 
+\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_0} & =
 \frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_{N}} \\
 \end{aligned}
 $$

@@ -1,4 +1,4 @@
-# DWGSI
+# DwgSim
 
 ## How to get the submodules
 
