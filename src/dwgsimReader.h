@@ -203,6 +203,8 @@ namespace DwgSim
             std::function<void(Dwg_Object *, Dwg_Object *, const ObjectName &, Dwg_Object_Type)> process_object,
             EntitySpaceType space);
 
+        void TraverseDocEntities(std::function<void(rapidjson::Value &, EntitySpaceType)> processEntityJSON);
+
         void DebugPrint()
         {
             int64_t allObjCount{0};
@@ -328,6 +330,8 @@ namespace DwgSim
             };
             TraverseEntitiesInSpace(process_object, BlockSpace);
         }
+
+        void ReformSplines();
 
         void fillEntityJson(Dwg_Object *obj, const ObjectName &name, Dwg_Object_Type type, rapidjson::Value &entJson);
 

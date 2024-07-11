@@ -125,6 +125,8 @@ Note that JSON stores `start_angle` and `end_angle` as radian values, while in D
 
 Note that in JSON `start_angle` and `end_angle` are in radian. **Not sure if they should be in degrees in DXF.**
 
+Note that according to documentation, the `sm_axis` and `center` are in WCS.
+
 ### POLYLINE
 
 In JSON, polylines of 2D and 3D type are separately stored in `POLYLINE_2D` and `POLYLINE_3D` entities.
@@ -243,7 +245,11 @@ In the mode above where `ctrl_pts` is empty and `fit_pts` is not empty, the oper
 $$
 \mathbf{x}(t)=\sum_{i=1}^{N_f} S_i(t) \mathbf{f}_i
 $$
-where $\mathbf{f}_i$ are fitting points and $S_i(t)$ are spline interpolation bases. The bases are piecewise cubic functions in parameter space of $t$.
+where $\mathbf{f}_i$ are fitting points and $S_i(t)$ are spline interpolation bases. The bases are piecewise cubic polynomials in parameter space of $t$. The notation above uses a Lagrangian type basis, but in real life we would like to use cubic Hermit-interpolation basis or cubic Bézier basis. Under the framework of NURBS, we would use cubic Bézier basis:
+$$
+\mathbf{x}(t)=\sum_{i=1}^{N_b} B_i(t) \mathbf{c}_i
+$$
+where control points $\mathbf{c}_i$ are solved using the interpolation conditions and start/end conditions.
 
 When `fit_pts` is empty and `ctrl_pts` is present, the spline is created with purely control points as a B-spline.
 Normally, by default this B-spline is cubic, using knots of $[0,0,0,0,1,...,N-3,N-3, N-3, N-3]$.
@@ -263,6 +269,39 @@ $$
 [t_0, t_0, t_0, t_0, t_1, t_2, t_3,...,t_N, t_N, t_N, t_N]
 $$
 and $N+2$ control points $\mathbf{c}_1,...\mathbf{c}_{N+2}$. Combined with boundary conditions, the conversion is basically a linear solving procedure.
+
+Recall
+$$
+\mathbf{x}(t)=\sum_{i=1}^{N_b = N+2} B_i(t) \mathbf{c}_i
+$$
+in order to obtain the control points $\mathbf{c}_i$, we want fit point conditions:
+$$
+\mathbf{x}(t_i) = \mathbf{f}_i, i=1,2...N_f
+$$
+and also boundary conditions (for open splines):
+$$
+\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_0} = \mathbf{T}_0,\ \ \ \ 
+\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_{N}} = \mathbf{T}_{end}
+$$
+where tangential $\mathbf{T}$ vectors are specified with `beg_tan_vec` and `end_tan_vec`.
+If either of them is zero, the corresponding boundary condition is replaced with a natural condition:
+$$
+\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_0} = 0,\ \ \ \ \text{or}\ \ 
+\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_{N}} = 0
+$$
+If the `splineflags`'s 3rd bit indicates the fitting line is closed (```splineflags & 0x04 == true``` ), periodic BC must be used instead:
+$$
+\begin{aligned}
+\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_0} & = 
+\frac{\mathrm{d}\,\mathbf{x}(t)}{\mathrm{d}\, t}|_{t=t_{N}} \\
+\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_0} & = 
+\frac{\mathrm{d}^2\,\mathbf{x}(t)}{\mathrm{d}\, t^2}|_{t=t_{N}} \\
+\end{aligned}
+$$
+
+The corresponding solving procedure is implemented in the `CubicSplineToBSpline` function in `splineUtil.h`, which is basically a dense linear solving.
+
+The testing program `testSplineConversion` is used to test the conversion results against the AutoCAD's output. For 1.open lines with both ends natural boundary condition, 2.both ends given tangential vectors, 3.one end given tangential vectors and 4.closed fitting lines, the conversion almost exactly matches the output of AutoCAD's DXF export.
 
 ### INSERT
 
@@ -292,7 +331,7 @@ and $N+2$ control points $\mathbf{c}_1,...\mathbf{c}_{N+2}$. Combined with bound
 
 The `blockId` and `blockName` both refers to the unique block. `layerId` is converted to the corresponding layer's name in the DXF output. 
 
-The `rotation` field is **not tested** now.
+The `rotation` field is in radian, and must be converted to degrees when output in the DXF.
 
 Somehow, libredwg gives INSERT's `num_cols` and `num_rows` as 0 by default, but this is erroneous when put into DXF. So the JSON document records `max(1,num_cols)` (and rows).
 **It is not sure if this is appropriate in all situations.**

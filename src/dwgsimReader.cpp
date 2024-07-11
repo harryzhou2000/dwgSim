@@ -1,4 +1,5 @@
 #include "dwgsimReader.h"
+#include "splineUtil.h"
 
 namespace DwgSim
 {
@@ -68,6 +69,110 @@ namespace DwgSim
             for (int i = 0; i < block_control->num_entries; i++)
                 process_BLOCK_HEADER(block_control->entries[i], BlockSpace);
         }
+    }
+
+    void Reader::TraverseDocEntities(std::function<void(rapidjson::Value &, EntitySpaceType)> processEntityJSON)
+    {
+        if (doc.HasMember("modelSpaceEntities"))
+        {
+            for (int64_t i = 0; i < doc["modelSpaceEntities"].Size(); i++)
+                processEntityJSON(doc["modelSpaceEntities"][i], ModelSpace);
+        }
+        if (doc.HasMember("blocks"))
+            for (auto it = doc["blocks"].MemberBegin(); it != doc["blocks"].MemberEnd(); ++it)
+                if (it->value.HasMember("entities"))
+                    for (int64_t i = 0; i < it->value["entities"].Size(); i++)
+                        processEntityJSON(it->value["entities"][i], BlockSpace);
+    }
+
+    void Reader::ReformSplines()
+    {
+        TraverseDocEntities(
+            [&](rapidjson::Value &entJson, EntitySpaceType space)
+            {
+                if (entJson["type"].GetString() != std::string("SPLINE"))
+                    return;
+                if (entJson["scenario"].GetInt() == 1)
+                {
+                    if (entJson["periodic"].GetInt() && entJson["degree"].GetInt() == 3)
+                    { //! not considering degrees other than 3
+                        auto ctrl_pts = RapidJsonGetMat3X(entJson["ctrl_pts"]);
+                        auto knots = RapidJsonGetVecX(entJson["knots"]);
+                        auto weights = RapidJsonGetVecX4th(entJson["ctrl_pts"]);
+                        assert(ctrl_pts.cols() == knots.size() - 1);
+                        MatX bases, dBases, ddBases;
+                        BSplineBasesPeriodic(
+                            3,
+                            knots, knots,
+                            bases, dBases, ddBases);
+                        auto fit_pts = ctrl_pts * bases;
+                        if (weights.squaredNorm()) // rational
+                        {
+                            bases = bases.array().colwise() * weights.array();
+                            bases = bases.array().rowwise() / bases.array().colwise().sum();
+                        }
+
+                        entJson["fit_pts"] = Mat3XGetRapidJson(fit_pts, doc.GetAllocator());
+                        entJson["ctrl_pts"] = rapidjson::Value(rapidjson::kArrayType);
+                        entJson["scenario"] = 2;
+                        entJson["periodic"] = 0;
+                        entJson["flag"] = 1064; // experience
+                        entJson["splineflags"] = entJson["splineflags"].GetInt() | 0x04;
+                        // std::cout << fit_pts << std::endl;
+                        // std::cout << bases << std::endl;
+                    }
+                }
+                if (entJson["fit_pts"].Size() == 0)
+                    return;
+                if (entJson["ctrl_pts"].Size() != 0)
+                    return;
+                if (entJson["degree"].GetInt() != 3)
+                    throw std::runtime_error("spline should be degree 3 using fit_pts");
+                if (entJson["fit_pts"].Size() < 2)
+                    throw std::runtime_error("spline should have at least 2 fit pts");
+
+                auto fit_pts = RapidJsonGetMat3X(entJson["fit_pts"]);
+                auto knots = RapidJsonGetVecX(entJson["knots"]);
+                if (knots.size() == 0) // use default chord length parameter space knots
+                {
+                    knots.resize(fit_pts.cols());
+                    if (entJson["knotparam"].GetInt() == 0)
+                    { // use default chord length parameter space knots
+                        knots[0] = 0;
+                        for (int64_t i = 1; i < knots.size(); i++)
+                            knots[i] = knots[i - 1] +
+                                       (fit_pts(Eigen::all, i) - fit_pts(Eigen::all, i - 1)).norm();
+                    }
+                    // TODO: square root case
+                }
+                else if (knots.size() == fit_pts.cols())
+                {
+                    // do nothing
+                }
+                else if (knots.size() == fit_pts.cols() + 6) // guessed situation
+                {
+                    VecX knotsA = knots(Eigen::seq(3, 3 + fit_pts.cols() - 1));
+                    knots = knotsA;
+                }
+
+                auto start_tan = RapidJsonGetVec3(entJson["beg_tan_vec"]);
+                auto end_tan = RapidJsonGetVec3(entJson["end_tan_vec"]);
+
+                VecX b_knots;
+                Mat3X b_pts;
+
+                bool fitClosed = entJson["splineflags"].GetUint() & 0x04;
+
+                DwgSim::CubicSplineToBSpline(
+                    knots, fit_pts,
+                    start_tan, end_tan,
+                    b_knots, b_pts, fitClosed);
+
+                entJson["knots"] = VecXGetRapidJson(b_knots, doc.GetAllocator());
+                entJson["ctrl_pts"] = Mat3XGetRapidJson(b_pts, doc.GetAllocator());
+                for (int64_t i = 0; i < entJson["ctrl_pts"].Size(); i++)
+                    entJson["ctrl_pts"][i].PushBack(0.0, doc.GetAllocator()); // 0 weights for non-rational B-Spline
+            });
     }
 
 #define __OUTPUT_SUBCLASS_NAME(name) \
@@ -337,6 +442,7 @@ namespace DwgSim
             __FILL_RAPIDJSON_FIELD_INT(rational)
             __FILL_RAPIDJSON_FIELD_INT(weighted)
             __FILL_RAPIDJSON_FIELD_INT(knotparam)
+            __FILL_RAPIDJSON_FIELD_INT(scenario)
             __FILL_RAPIDJSON_FIELD_DOUBLE(ctrl_tol)
             __FILL_RAPIDJSON_FIELD_DOUBLE(fit_tol)
             __FILL_RAPIDJSON_FIELD_DOUBLE(knot_tol)
@@ -378,6 +484,7 @@ namespace DwgSim
             entJson.AddMember("ctrl_pts", ctrlPtsJson, alloc);
             entJson.AddMember("fit_pts", fitPtsJson, alloc);
             entJson.AddMember("knots", knotsJson, alloc);
+            entJson.AddMember("extrusion", Vec3GetRapidJson({0, 0, 1}, alloc), alloc);
         }
         if (type == DWG_TYPE_INSERT)
         {
@@ -562,7 +669,8 @@ namespace DwgSim
             __OUTPUT_ENTITY_STRING(blockName, 2)
             __OUTPUT_ENTITY_VECTOR3(ins_pt, 10, 10)
             __OUTPUT_ENTITY_VECTOR3(scale, 41, 1)
-            __OUTPUT_ENTITY_DOUBLE(rotation, 50)
+            o << "  " << 50 << "\n"
+              << entJson["rotation"].GetDouble() * 180. / pi << "\n"; //! in degree
             __OUTPUT_ENTITY_INT(num_cols, 70)
             __OUTPUT_ENTITY_INT(num_rows, 71)
             __OUTPUT_ENTITY_DOUBLE(col_spacing, 44)

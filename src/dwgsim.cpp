@@ -39,6 +39,7 @@ int main(int argc, char *argv[])
 
         reader.CollectModelSpaceEntities();
         reader.CollectBlockSpaceEntities();
+        reader.ReformSplines();
 
         if (argparser.get("-O") == "JSON")
         {
@@ -66,7 +67,7 @@ int main(int argc, char *argv[])
     catch (const std::exception &err)
     {
         std::cerr << err.what() << std::endl;
-        return 2;
+        std::abort();
     }
 
     return 0;
