@@ -1,9 +1,12 @@
 
 #include "splineUtil.h"
+#include "csvUtil.h"
 #include <cassert>
+#include <fstream>
 
 namespace DwgSim
 {
+    static std::string dataDir;
     void test1()
     {
         VecX knots;
@@ -153,13 +156,65 @@ namespace DwgSim
         assert(err < 1e-10);
         std::cout << "Test Error: " << err << std::endl;
     }
+
+    void test5()
+    {
+        VecX knots;
+        Mat3X pts;
+
+        auto ispts = std::ifstream(dataDir + "/dat.csv");
+        assert(ispts);
+        auto ispts_read = getEigenMatrixFromCSV(ispts);
+        pts.setZero(3, ispts_read.rows());
+        pts({0, 1}, Eigen::all) = ispts_read.transpose();
+        knots.resize(pts.cols());
+        double cLen = 0;
+        knots(0) = cLen;
+        for (int i = 1; i < pts.cols(); i++)
+            cLen += (pts(Eigen::all, i) - pts(Eigen::all, i - 1)).norm(),
+                knots(i) = cLen;
+
+        VecX b_knots;
+        Mat3X b_pts;
+
+        DwgSim::CubicSplineToBSpline(
+            knots, pts,
+            Vec3{0, 0, 0},
+            Vec3{0, 0, 0},
+            b_knots, b_pts, false);
+
+        // std::cout << "b_pts" << std::endl;
+        // std::cout << b_pts.transpose() << std::endl;
+
+        Mat3X b_pts_ans;
+        auto isb_pts = std::ifstream(dataDir + "/datAc.csv");
+        assert(isb_pts);
+        b_pts_ans = getEigenMatrixFromCSV(isb_pts).transpose();
+
+        double err = (b_pts_ans - b_pts).norm() / b_pts_ans.norm();
+        assert(err < 1e-10);
+        std::cout << "Test Error: " << err << std::endl;
+        // std::cout << "=====" << std::endl;
+        // std::cout << b_pts_ans << std::endl;
+        // std::cout << "=====" << std::endl;
+        // std::cout << pts << std::endl;
+    }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    assert(argc >= 2);
+    DwgSim::dataDir = argv[1];
+
+    std::cout << "Test 1: free-free" << std::endl;
     DwgSim::test1(); // free-free
+    std::cout << "Test 2: periodic" << std::endl;
     DwgSim::test2(); // periodic
+    std::cout << "Test 3: tan-tan" << std::endl;
     DwgSim::test3(); // tan-tan
+    std::cout << "Test 4: free-tan" << std::endl;
     DwgSim::test4(); // free-tan
+    std::cout << "Test 5: free-free 100 pts" << std::endl;
+    DwgSim::test5();
     return 0;
 }

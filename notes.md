@@ -22,7 +22,11 @@
 
 ## Examination Process
 
-Using AutoCAD 2016 for producing .dwg and xxx-ac.dxf (R2013) example files. Using libreCAD to try opening converted dxf files.
+Using AutoCAD 2016 for producing .dwg and xxx-ac.dxf (R2013) example files.
+
+The xxx-ac.dxf files are used as reference, and .dwg files are input of dwgSim and converted to .json and .dxf files.
+
+Using libreCAD to try opening converted dxf files.
 
 ## Structure of Output
 
