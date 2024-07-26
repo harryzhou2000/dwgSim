@@ -8,10 +8,15 @@ int main(int argc, char *argv[])
 {
     int dwgError = 0;
 
+    int dupWarn = 0;
+    int dupDel = 0;
+
     argparse::ArgumentParser argparser("dwgsim", DNDS_MACRO_TO_STRING(DWGSIM_CURRENT_COMMIT_HASH));
     argparser.add_argument("input").help("path to the dwg input");
     argparser.add_argument("-o").help("path to output");
     argparser.add_argument("-O").default_value("JSON").help("output format");
+    argparser.add_argument("--dupWarn").default_value(0).store_into(dupWarn);
+    argparser.add_argument("--dupDel").default_value(0).store_into(dupDel);
 
     try
     {
@@ -40,6 +45,7 @@ int main(int argc, char *argv[])
         reader.CollectModelSpaceEntities();
         reader.CollectBlockSpaceEntities();
         reader.ReformSplines();
+        reader.CleanLineEntityDuplication(1e-8, 1e-5, dupWarn, dupDel);
 
         if (argparser.get("-O") == "JSON")
         {

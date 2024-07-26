@@ -17,6 +17,7 @@
     - [SPLINE](#spline)
       - [Cubic Spline to B-Spline Conversion](#cubic-spline-to-b-spline-conversion)
     - [INSERT](#insert)
+  - [Line deduplication](#line-deduplication)
 
 <!-- /code_chunk_output -->
 
@@ -338,3 +339,33 @@ Somehow, libredwg gives INSERT's `num_cols` and `num_rows` as 0 by default, but 
 **It is not sure if this is appropriate in all situations.**
 <!-- ! WARNING -->
 
+## Line deduplication
+
+
+If a line is defined with $\mathbf{p}_0$, $\mathbf{p}_1$, then direction is
+$$
+\mathbf{d} = \frac{\mathbf{p}_1-\mathbf{p}_0}{\|\mathbf{p}_1-\mathbf{p}_0\|}
+$$
+and base point is the closest point on the line to the origin.
+Using
+$$
+\begin{aligned}
+\frac{1}{2}l^2&=\frac{1}{2}(\alpha \mathbf{p}_1 + (1-\alpha)\mathbf{p}_0)\cdot(\alpha \mathbf{p}_1 + (1-\alpha)\mathbf{p}_0)\\
+ & =\frac{1}{2}\left[\alpha^2 p_{11} + (1-\alpha)^2p_{00} + 2\alpha(1-\alpha)p_{01}\right]\\
+\end{aligned}
+$$
+where $p_{ij}=\mathbf{p}_i\cdot\mathbf{p}_j$
+then 
+$$
+\begin{aligned}
+\frac{\mathrm{d}l^2/2}{d\alpha}
+&=(p_{11}-p_{01})\alpha + (p_{01}-p_{00})(1-\alpha)
+\\&=(p_{11}+p_{01}-2p_{01})\alpha + (p_{01}-p_{00})
+\end{aligned}
+$$
+therefore, we have $\alpha$ at base point:
+$$
+\alpha_b=\frac{p_{00}-p_{01}}{p_{11}+p_{00}-2p_{01}}
+=\frac{\mathbf{p}_0\cdot(\mathbf{p}_0-\mathbf{p}_1)}
+{(\mathbf{p}_0-\mathbf{p}_1)\cdot(\mathbf{p}_0-\mathbf{p}_1)}
+$$

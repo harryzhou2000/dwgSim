@@ -27,6 +27,8 @@ find_path(DWGSIM_EXTERNAL_INCLUDE_RAPIDJSON rapidjson REQUIRED PATHS
     externalSrc/rapidjson/include NO_DEFAULT_PATH) # hear-only, no build
 find_path(DWGSIM_EXTERNAL_INCLUDE_EIGEN Eigen REQUIRED  PATHS
     externalSrc/eigen NO_DEFAULT_PATH) # hear-only, no build
+find_path(DWGSIM_EXTERNAL_INCLUDE_NANOFLANN nanoflann.hpp REQUIRED  PATHS
+    externalSrc/nanoflann/include NO_DEFAULT_PATH) # hear-only, no build
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "libredwg shared")
 set(LIBREDWG_LIBONLY ON CACHE BOOL "libredwg libonly")
@@ -45,6 +47,7 @@ set(DWGSIM_EXTERNAL_INCLUDES ${DWGSIM_EXTERNAL_INCLUDES}
     ${DWGSIM_EXTERNAL_INCLUDE_ARGPARSE}
     ${DWGSIM_EXTERNAL_INCLUDE_RAPIDJSON}
     ${DWGSIM_EXTERNAL_INCLUDE_EIGEN}
+    ${DWGSIM_EXTERNAL_INCLUDE_NANOFLANN}
     CACHE INTERNAL "dwgsim external")
 
 
@@ -56,9 +59,16 @@ add_executable(dwgsim src/dwgsim.cpp ${DWGSIM_CPPS})
 
 add_executable(testSplineConversion test/testSplineConversion.cpp ${DWGSIM_CPPS})
 
+add_executable(testLineDetect test/testLineDetect.cpp ${DWGSIM_CPPS})
+
 set(exeTargets dwgsim
-testSplineConversion
 )
+
+
+set(testExeTargets testSplineConversion
+testLineDetect
+)
+
 
 if(MSVC)
   set(redwg libredwg)
@@ -72,5 +82,15 @@ foreach(t IN LISTS exeTargets)
     target_link_libraries(${t} PUBLIC ${redwg})
     target_include_directories(${t} PUBLIC  ${DWGSIM_EXTERNAL_INCLUDES})
     target_compile_definitions(${t} PUBLIC DWGSIM_CURRENT_COMMIT_HASH=${DWGSIM_RECORDED_COMMIT_HASH})
+endforeach()
+
+enable_testing()
+
+foreach(t IN LISTS testExeTargets)
+    message(STATUS ${t})
+    target_link_libraries(${t} PUBLIC ${redwg})
+    target_include_directories(${t} PUBLIC  ${DWGSIM_EXTERNAL_INCLUDES})
+    target_compile_definitions(${t} PUBLIC DWGSIM_CURRENT_COMMIT_HASH=${DWGSIM_RECORDED_COMMIT_HASH})
+    add_test(NAME "${t}_t" COMMAND ${t} "${CMAKE_SOURCE_DIR}/data/splineTest5")
 endforeach()
 

@@ -1,5 +1,6 @@
 #include "dwgsimReader.h"
 #include "splineUtil.h"
+#include "lineDetect.h"
 
 namespace DwgSim
 {
@@ -680,5 +681,99 @@ namespace DwgSim
         }
         else
             throw std::out_of_range("type not implemented for dxf out");
+    }
+
+    void Reader::CleanLineEntityDuplication(double eps, double lEps, int warningLevel, int deleteLevel)
+    {
+
+        auto reportLine = [&](rapidjson::Value &v)
+        {
+            std::cerr << v["handle"].GetInt64();
+            std::cerr << " LINE ";
+            std::cerr << v["start"][0].GetDouble() << " ";
+            std::cerr << v["start"][1].GetDouble() << " ";
+            std::cerr << v["start"][2].GetDouble() << " ";
+            std::cerr << v["end"][0].GetDouble() << " ";
+            std::cerr << v["end"][1].GetDouble() << " ";
+            std::cerr << v["end"][2].GetDouble() << " ";
+            std::cerr << "\n";
+        };
+        auto cleanEntityListLines = [&](rapidjson::Value &elist, const std::string &blkName)
+        {
+            using namespace std::literals;
+            assert(elist.IsArray());
+            std::vector<int64_t> line2ListIdx;
+            t_infLineSet lines;
+
+            for (int64_t i = 0; i < elist.Size(); i++)
+            {
+                if (elist[i]["type"].GetString() == "LINE"s)
+                {
+                    Eigen::Vector<double, 6> lineDat;
+                    lineDat(0) = elist[i]["start"][0].GetDouble();
+                    lineDat(1) = elist[i]["start"][1].GetDouble();
+                    lineDat(2) = elist[i]["start"][2].GetDouble();
+                    lineDat(3) = elist[i]["end"][0].GetDouble();
+                    lineDat(4) = elist[i]["end"][1].GetDouble();
+                    lineDat(5) = elist[i]["end"][2].GetDouble();
+                    lines.push_back(lineDat);
+                    line2ListIdx.push_back(i);
+                }
+            }
+
+            auto [dupPrecise, dupInclude] = linesDuplications(lines, 1e-8, 1e-5);
+            if (warningLevel >= 1)
+            {
+                for (auto &s : dupPrecise)
+                {
+                    std::cerr << "Duplicate in block [" << blkName << "]" << "\n";
+                    for (auto ii : s)
+                        reportLine(elist[line2ListIdx[ii]]);
+                }
+            }
+            if (warningLevel >= 2)
+            {
+                for (auto &p : dupInclude)
+                {
+                    std::cerr << "Line Inclusion in block [" << blkName << "]" << "\n";
+                    auto i = line2ListIdx[p.first];
+                    auto j = line2ListIdx[p.second];
+                    reportLine(elist[i]);
+                    reportLine(elist[j]);
+                }
+            }
+
+            std::set<int64_t> lineDelete;
+
+            if (deleteLevel >= 1)
+            {
+                for (auto &s : dupPrecise)
+                {
+                    assert(s.size());
+                    auto s0 = *s.begin();
+                    for (auto ii : s)
+                        if (ii != s0)
+                            lineDelete.insert(line2ListIdx[ii]);
+                }
+            }
+            if (deleteLevel >= 2)
+            {
+                for (auto &p : dupInclude)
+                    if (!lineDelete.count(line2ListIdx[p.first]))
+                        lineDelete.insert(line2ListIdx[p.second]);
+            }
+
+            rapidjson::Value newList(rapidjson::kArrayType);
+            for (int64_t i = 0; i < elist.Size(); i++)
+                if (lineDelete.count(i) == 0)
+                    newList.PushBack(std::move(elist[i]), doc.GetAllocator());
+            elist = std::move(newList);
+        };
+
+        cleanEntityListLines(doc["modelSpaceEntities"], "modelSpace");
+        for (auto it = doc["blocks"].MemberBegin(); it != doc["blocks"].MemberEnd(); ++it)
+        {
+            cleanEntityListLines(it->value["entities"], it->value["name"].GetString());
+        }
     }
 }

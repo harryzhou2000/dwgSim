@@ -337,6 +337,8 @@ namespace DwgSim
 
         void outEntityDXF(std::ostream &o, rapidjson::Value &entJso);
 
+        void CleanLineEntityDuplication(double eps, double lEps, int warningLevel = 0, int deleteLevel = 0);
+
         ~Reader()
         {
             dwg_free(&dwg);
