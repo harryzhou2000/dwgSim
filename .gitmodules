@@ -12,3 +12,6 @@
 	path = externalSrc/eigen
 	url = https://gitlab.com/libeigen/eigen.git
 	branch = 3.4
+[submodule "externalSrc/nanoflann"]
+	path = externalSrc/nanoflann
+	url = https://github.com/jlblancoc/nanoflann
