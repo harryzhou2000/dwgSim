@@ -37,6 +37,8 @@ namespace DwgSim
         using t_base = std::runtime_error;
         using t_base::t_base;
     };
+
+    const double pi = 3.141592653589793238462643;
 }
 
 #pragma once

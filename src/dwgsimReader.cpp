@@ -698,12 +698,33 @@ namespace DwgSim
             std::cerr << v["end"][2].GetDouble() << " ";
             std::cerr << "\n";
         };
+        auto reportArcOrCirc = [&](rapidjson::Value &v)
+        {
+            using namespace std::literals;
+            std::cerr << v["handle"].GetInt64();
+            std::cerr << v["type"].GetString();
+            std::cerr << v["extrusion"][0].GetDouble() << " ";
+            std::cerr << v["extrusion"][1].GetDouble() << " ";
+            std::cerr << v["extrusion"][2].GetDouble() << " ";
+            std::cerr << v["center"][0].GetDouble() << " ";
+            std::cerr << v["center"][1].GetDouble() << " ";
+            std::cerr << v["center"][2].GetDouble() << " ";
+            std::cerr << v["radius"].GetDouble() << " ";
+            if (v["type"].GetString() == "ARC"s)
+            {
+                std::cerr << v["start_angle"].GetDouble() << " ";
+                std::cerr << v["end_angle"].GetDouble() << " ";
+            }
+            std::cerr << "\n";
+        };
         auto cleanEntityListLines = [&](rapidjson::Value &elist, const std::string &blkName)
         {
             using namespace std::literals;
             assert(elist.IsArray());
             std::vector<int64_t> line2ListIdx;
             t_eigenPts<6> lines;
+            std::vector<int64_t> arc2ListIdx;
+            t_eigenPts<9> arcs;
 
             for (int64_t i = 0; i < elist.Size(); i++)
             {
@@ -721,7 +742,35 @@ namespace DwgSim
                 }
             }
 
+            for (int64_t i = 0; i < elist.Size(); i++)
+            {
+                if (elist[i]["type"].GetString() == "ARC"s || elist[i]["type"].GetString() == "CIRCLE"s)
+                {
+                    Eigen::Vector<double, 9> arcDat;
+                    arcDat(0) = elist[i]["extrusion"][0].GetDouble();
+                    arcDat(1) = elist[i]["extrusion"][1].GetDouble();
+                    arcDat(2) = elist[i]["extrusion"][2].GetDouble();
+                    arcDat(3) = elist[i]["center"][0].GetDouble();
+                    arcDat(4) = elist[i]["center"][1].GetDouble();
+                    arcDat(5) = elist[i]["center"][2].GetDouble();
+                    arcDat(6) = elist[i]["radius"].GetDouble();
+                    if (elist[i]["type"].GetString() == "ARC"s)
+                    {
+                        arcDat(7) = elist[i]["start_angle"].GetDouble();
+                        arcDat(8) = elist[i]["end_angle"].GetDouble();
+                    }
+                    else
+                    {
+                        arcDat(7) = 0;
+                        arcDat(8) = 2 * pi;
+                    }
+                    arcs.push_back(arcDat);
+                    arc2ListIdx.push_back(i);
+                }
+            }
+
             auto [dupPrecise, dupInclude] = linesDuplications(lines, 1e-8, 1e-5);
+            auto [dupPreciseArc, dupIncludeArc] = arcsDuplications(arcs, 1e-8);
             if (warningLevel >= 1)
             {
                 for (auto &s : dupPrecise)
@@ -729,6 +778,12 @@ namespace DwgSim
                     std::cerr << "Duplicate in block [" << blkName << "]" << "\n";
                     for (auto ii : s)
                         reportLine(elist[line2ListIdx[ii]]);
+                }
+                for (auto &s : dupPreciseArc)
+                {
+                    std::cerr << "Duplicate in block [" << blkName << "]" << "\n";
+                    for (auto ii : s)
+                        reportArcOrCirc(elist[arc2ListIdx[ii]]);
                 }
             }
             if (warningLevel >= 2)
@@ -740,6 +795,14 @@ namespace DwgSim
                     auto j = line2ListIdx[p.second];
                     reportLine(elist[i]);
                     reportLine(elist[j]);
+                }
+                for (auto &p : dupIncludeArc)
+                {
+                    std::cerr << "Arc Inclusion in block [" << blkName << "]" << "\n";
+                    auto i = arc2ListIdx[p.first];
+                    auto j = arc2ListIdx[p.second];
+                    reportArcOrCirc(elist[i]);
+                    reportArcOrCirc(elist[j]);
                 }
             }
 
@@ -755,12 +818,23 @@ namespace DwgSim
                         if (ii != s0)
                             lineDelete.insert(line2ListIdx[ii]);
                 }
+                for (auto &s : dupPreciseArc)
+                {
+                    assert(s.size());
+                    auto s0 = *s.begin();
+                    for (auto ii : s)
+                        if (ii != s0)
+                            lineDelete.insert(arc2ListIdx[ii]);
+                }
             }
             if (deleteLevel >= 2)
             {
                 for (auto &p : dupInclude)
                     if (!lineDelete.count(line2ListIdx[p.first]))
                         lineDelete.insert(line2ListIdx[p.second]);
+                for (auto &p : dupIncludeArc)
+                    if (!lineDelete.count(arc2ListIdx[p.first]))
+                        lineDelete.insert(arc2ListIdx[p.second]);
             }
 
             rapidjson::Value newList(rapidjson::kArrayType);

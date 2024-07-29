@@ -17,8 +17,6 @@
 namespace DwgSim
 {
 
-    const double pi = 3.141592653589793238462643;
-
 #define IS_FROM_TU_DWG(dwg) \
     (dwg->header.from_version >= R_2007) && !(dwg->opts & DWG_OPTS_IN)
     //! copied from libreDWG

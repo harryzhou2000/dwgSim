@@ -4,7 +4,12 @@
 #include "splineUtil.h"
 #include <set>
 #include <vector>
+DISABLE_WARNING_PUSH
+#if defined(_MSC_VER) && defined(_WIN32) && !defined(__clang__)
+#pragma warning( disable: 4267 )
+#endif
 #include <nanoflann.hpp>
+DISABLE_WARNING_POP
 #include <Eigen/Dense>
 
 namespace DwgSim
@@ -140,7 +145,14 @@ namespace DwgSim
 
     static auto Seq012 = Eigen::seq(Eigen::fix<0>, Eigen::fix<2>);
     static auto Seq345 = Eigen::seq(Eigen::fix<3>, Eigen::fix<5>);
+    static auto Seq678 = Eigen::seq(Eigen::fix<6>, Eigen::fix<8>);
 
+    /**
+     * @brief
+     *
+     * @param lines vector of (x1 y1 z1 x2 y2 z2)
+     * @return vector of (xd yd zd xb yb zb), d for direction, b for base point
+     */
     inline auto linesToInfLine(t_eigenPts<6> &lines)
     {
         t_eigenPts<6> ret = lines;
@@ -206,6 +218,12 @@ namespace DwgSim
         return getPtsDuplications<6>(linesInfNorm, eps);
     }
 
+    /**
+     * @brief
+     *
+     * @param lines vector of (x1 y1 z1 x2 y2 z2)
+     * @return (preciseDups, includeDups)
+     */
     inline auto linesDuplications(t_eigenPts<6> &lines, double eps = 1e-8, double lEps = 1e-5)
     {
         auto linesInf = linesToInfLine(lines);
@@ -247,6 +265,70 @@ namespace DwgSim
                     }
                     if (Li - lEps < Lj && Ri + lEps > Rj)
                         includeDups.emplace_back(std::make_pair(i, j));
+                }
+            }
+        }
+
+        return std::make_tuple(preciseDups, includeDups);
+    }
+
+    inline auto arcsRegulate(t_eigenPts<9> &arcs)
+    {
+        t_eigenPts<9> ret = arcs;
+        double maxPos = 1e-100;
+        double maxR = 1e-100;
+        for (auto &v : ret)
+        {
+            if (v(8) < v(7))
+                v(8) += 2 * pi;
+            assert(v(8) >= v(7));
+
+            v(Seq012).normalize();
+            maxPos = std::max(maxPos, v(Seq345).norm());
+            maxR = std::max(maxR, v(6));
+        }
+        for (auto &v : ret)
+        {
+            v(Seq345) /= maxPos;
+            v(6) /= maxR;
+        }
+        return ret;
+    }
+
+    inline auto arcsToCircle(t_eigenPts<9> &arcs)
+    {
+        t_eigenPts<7> ret;
+        for (auto &v : arcs)
+            ret.push_back(v(Eigen::seq(0, 6)));
+        return ret;
+    }
+
+    inline auto arcsDuplications(t_eigenPts<9> &arcs, double eps = 1e-8)
+    {
+        auto arcsReg = arcsRegulate(arcs);
+        auto circs = arcsToCircle(arcsReg);
+        // std::vector<int64_t> inPreciseDups(arcs.size(), -1);
+        std::vector<std::set<int64_t>> preciseDups;
+        std::vector<std::pair<int64_t, int64_t>> includeDups;
+        auto circDup = getPtsDuplications<7>(circs, eps);
+        preciseDups = getPtsDuplications<9>(arcsReg, eps);
+
+        for (auto &s : circDup)
+        {
+            for (auto i : s)
+            {
+                double t0 = arcsReg[i](7);
+                double t1 = arcsReg[i](8);
+                for (auto j : s)
+                {
+                    if (j == i)
+                        continue;
+                    double t0c = arcsReg[j](7);
+                    double t1c = arcsReg[j](8);
+                    if (t0 <= t0c + eps && t1 >= t1c - eps)
+                        includeDups.push_back(std::make_pair(i, j));
+                    if (t0 == 0 && t1 == 2 * pi) // is a circle
+                        includeDups.push_back(std::make_pair(i, j));
                 }
             }
         }
