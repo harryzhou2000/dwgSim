@@ -112,7 +112,7 @@ namespace DwgSim
         if (!linesInf.size())
             return ret;
 
-        kd_tree_t kd_tree(dim, linesInf);
+        kd_tree_t kd_tree(linesInf[0].size(), linesInf);
 
         std::vector<int64_t> inSet;
         inSet.resize(linesInf.size(), -1);
@@ -441,4 +441,50 @@ namespace DwgSim
 
         return std::make_tuple(preciseDups, includeDups);
     }
+
+    class PolylineGeomSet
+    {
+        std::map<int, std::set<int64_t>> siz_to_idx;
+        std::vector<int64_t> poly2list;
+        std::vector<Eigen::VectorXd> polyVecs; // size of vectorxd is p_siz * 4 + 3
+    public:
+        void insertPoly(int64_t list_idx, int siz, const Eigen::VectorXd &polyData)
+        {
+            poly2list.push_back(list_idx);
+            polyVecs.push_back(polyData);
+            if (!siz_to_idx.count(siz))
+                siz_to_idx[siz] = std::set<int64_t>();
+            siz_to_idx.at(siz).insert(poly2list.size() - 1);
+        }
+
+        auto getDuplicates(double eps = 1e-8)
+        {
+            std::vector<std::set<int64_t>> ret;
+            for (auto &[siz, s] : siz_to_idx)
+            {
+                std::vector<Eigen::VectorXd> polyVecsCur;
+                std::vector<int64_t> localIdx;
+                polyVecsCur.reserve(s.size());
+                localIdx.reserve(s.size());
+                double maxL{1e-100};
+                for (auto i : s)
+                {
+                    polyVecsCur.push_back(polyVecs[i]);
+                    localIdx.push_back(i);
+                    maxL = std::max(maxL, polyVecs[i](Eigen::seq(3, Eigen::last)).array().abs().maxCoeff());
+                }
+                for (auto &v : polyVecsCur)
+                    v(Eigen::seq(3, Eigen::last)) /= maxL;
+
+                auto dups = getPtsDuplications<Eigen::Dynamic>(polyVecsCur, eps);
+                for (auto &ss : dups)
+                {
+                    ret.emplace_back();
+                    for (auto ii : ss)
+                        ret.back().insert(poly2list[localIdx[ii]]);
+                }
+            }
+            return ret;
+        }
+    };
 }

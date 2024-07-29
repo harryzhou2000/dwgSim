@@ -717,6 +717,12 @@ namespace DwgSim
             }
             std::cerr << "\n";
         };
+        auto reportPoly = [&](rapidjson::Value &v)
+        {
+            std::cerr << v["handle"].GetInt64() << " ";
+            std::cerr << v["type"].GetString() << " ";
+            std::cerr << "\n";
+        };
         auto cleanEntityListLines = [&](rapidjson::Value &elist, const std::string &blkName)
         {
             using namespace std::literals;
@@ -730,6 +736,8 @@ namespace DwgSim
             t_eigenPts<6> linesPoly;
             std::vector<int64_t> arcPoly2ListIdx;
             t_eigenPts<9> arcsPoly;
+
+            PolylineGeomSet polySet;
 
             for (int64_t i = 0; i < elist.Size(); i++)
             {
@@ -770,18 +778,40 @@ namespace DwgSim
                 }
                 if (elist[i]["type"].GetString() == "POLYLINE_2D"s || elist[i]["type"].GetString() == "POLYLINE_3D"s)
                 {
+                    Eigen::VectorXd polyVecC;
+                    polyVecC.setZero(elist[i]["vertex"].Size() * 4 + 3);
+                    Vec3 extrusion;
+                    extrusion(0) = elist[i]["extrusion"][0].GetDouble();
+                    extrusion(1) = elist[i]["extrusion"][1].GetDouble();
+                    extrusion(2) = elist[i]["extrusion"][2].GetDouble();
+                    if (elist[i]["type"].GetString() == "POLYLINE_3D"s)
+                        extrusion.setZero();
+                    polyVecC(Seq012) = extrusion;
+
+                    for (int64_t iv = 0; iv < elist[i]["vertex"].Size(); iv++)
+                    {
+                        Vec3 p0;
+                        p0(0) = elist[i]["vertex"][iv][0].GetDouble();
+                        p0(1) = elist[i]["vertex"][iv][1].GetDouble();
+                        p0(2) = elist[i]["vertex"][iv][2].GetDouble();
+                        double bulge = elist[i]["bulge"][iv].GetDouble();
+                        if (elist[i]["type"].GetString() == "POLYLINE_3D"s)
+                            bulge = 0;
+                        polyVecC(Eigen::seq(3 + iv * 4, 5 + iv * 4)) = p0;
+                        polyVecC(6 + iv * 4) = bulge;
+                    }
+
+                    polySet.insertPoly(i, int(elist[i]["vertex"].Size()), polyVecC);
+
                     for (int64_t iv = 1; iv < elist[i]["vertex"].Size(); iv++)
                     {
-                        Vec3 p0, p1, extrusion;
+                        Vec3 p0, p1;
                         p0(0) = elist[i]["vertex"][iv - 1][0].GetDouble();
                         p0(1) = elist[i]["vertex"][iv - 1][1].GetDouble();
                         p0(2) = elist[i]["vertex"][iv - 1][2].GetDouble();
                         p1(0) = elist[i]["vertex"][iv][0].GetDouble();
                         p1(1) = elist[i]["vertex"][iv][1].GetDouble();
                         p1(2) = elist[i]["vertex"][iv][2].GetDouble();
-                        extrusion(0) = elist[i]["extrusion"][0].GetDouble();
-                        extrusion(1) = elist[i]["extrusion"][1].GetDouble();
-                        extrusion(2) = elist[i]["extrusion"][2].GetDouble();
                         double bulge = elist[i]["bulge"][iv - 1].GetDouble();
 
                         if (elist[i]["type"].GetString() == "POLYLINE_3D"s || std::abs(bulge) < 1e-6)
@@ -810,9 +840,7 @@ namespace DwgSim
                             if (bulge < 0)
                                 std::swap(t0, t1);
                             Eigen::Vector<double, 9> arcDat;
-                            arcDat(0) = elist[i]["extrusion"][0].GetDouble();
-                            arcDat(1) = elist[i]["extrusion"][1].GetDouble();
-                            arcDat(2) = elist[i]["extrusion"][2].GetDouble();
+                            arcDat(Seq012) = extrusion;
                             arcDat(Seq345) = cent;
                             arcDat(6) = rad;
                             arcDat(7) = t0;
@@ -828,6 +856,7 @@ namespace DwgSim
             auto [dupPreciseArc, dupIncludeArc] = arcsDuplications(arcs, 1e-8);
             auto [dupPrecisePoly, dupIncludePoly] = lineInLinesDuplications(linesPoly, lines, 1e-8, 1e-5);
             auto [dupPreciseArcPoly, dupIncludeArcPoly] = arcInArcsDuplications(arcsPoly, arcs, 1e-8);
+            auto dupPolyPoly = polySet.getDuplicates(1e-8);
             for (auto &v : linesPoly)
                 std::cout << "line " << v.transpose() << std::endl;
             for (auto &v : arcsPoly)
@@ -855,6 +884,12 @@ namespace DwgSim
                 {
                     std::cerr << "Duplicate from Poly Seg in block [" << blkName << "]" << "\n";
                     reportArcOrCirc(elist[arc2ListIdx[p.second]]);
+                }
+                for (auto &s : dupPolyPoly)
+                {
+                    std::cerr << "Duplicate in block [" << blkName << "]" << "\n";
+                    for (auto i : s)
+                        reportPoly(elist[i]);
                 }
             }
             if (warningLevel >= 2)
@@ -911,6 +946,14 @@ namespace DwgSim
                     lineDelete.insert(line2ListIdx[p.second]);
                 for (auto &p : dupPreciseArcPoly)
                     lineDelete.insert(arc2ListIdx[p.second]);
+                for (auto &s : dupPolyPoly)
+                {
+                    assert(s.size());
+                    auto s0 = *s.begin();
+                    for (auto i : s)
+                        if (i != s0)
+                            lineDelete.insert(i);
+                }
             }
             if (deleteLevel >= 2)
             {
