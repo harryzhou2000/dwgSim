@@ -688,8 +688,10 @@ namespace DwgSim
 
         auto reportLine = [&](rapidjson::Value &v)
         {
+            std::cerr << "  ";
             std::cerr << v["handle"].GetInt64();
             std::cerr << " LINE ";
+            std::cerr << "Start,End: ";
             std::cerr << v["start"][0].GetDouble() << " ";
             std::cerr << v["start"][1].GetDouble() << " ";
             std::cerr << v["start"][2].GetDouble() << " ";
@@ -701,8 +703,10 @@ namespace DwgSim
         auto reportArcOrCirc = [&](rapidjson::Value &v)
         {
             using namespace std::literals;
+            std::cerr << "  ";
             std::cerr << v["handle"].GetInt64() << " ";
             std::cerr << v["type"].GetString() << " ";
+            std::cerr << "Extrusion,Center: ";
             std::cerr << v["extrusion"][0].GetDouble() << " ";
             std::cerr << v["extrusion"][1].GetDouble() << " ";
             std::cerr << v["extrusion"][2].GetDouble() << " ";
@@ -719,8 +723,21 @@ namespace DwgSim
         };
         auto reportPoly = [&](rapidjson::Value &v)
         {
+            using namespace std::literals;
+            std::cerr << "  ";
             std::cerr << v["handle"].GetInt64() << " ";
             std::cerr << v["type"].GetString() << " ";
+            std::cerr << "Start,End: ";
+            int size = v["vertex"].Size();
+            if (size)
+            {
+                std::cerr << v["vertex"][0][0].GetDouble() << " ";
+                std::cerr << v["vertex"][0][1].GetDouble() << " ";
+                std::cerr << v["vertex"][0][2].GetDouble() << " ";
+                std::cerr << v["vertex"][size - 1][0].GetDouble() << " ";
+                std::cerr << v["vertex"][size - 1][1].GetDouble() << " ";
+                std::cerr << v["vertex"][size - 1][2].GetDouble() << " ";
+            }
             std::cerr << "\n";
         };
         auto cleanEntityListLines = [&](rapidjson::Value &elist, const std::string &blkName)
@@ -857,10 +874,10 @@ namespace DwgSim
             auto [dupPrecisePoly, dupIncludePoly] = lineInLinesDuplications(linesPoly, lines, 1e-8, 1e-5);
             auto [dupPreciseArcPoly, dupIncludeArcPoly] = arcInArcsDuplications(arcsPoly, arcs, 1e-8);
             auto dupPolyPoly = polySet.getDuplicates(1e-8);
-            for (auto &v : linesPoly)
-                std::cout << "line " << v.transpose() << std::endl;
-            for (auto &v : arcsPoly)
-                std::cout << "arcs " << v.transpose() << std::endl;
+            // for (auto &v : linesPoly)
+            //     std::cout << "line " << v.transpose() << std::endl;
+            // for (auto &v : arcsPoly)
+            //     std::cout << "arcs " << v.transpose() << std::endl;
             if (warningLevel >= 1)
             {
                 for (auto &s : dupPrecise)
