@@ -6,7 +6,7 @@
 #include <vector>
 DISABLE_WARNING_PUSH
 #if defined(_MSC_VER) && defined(_WIN32) && !defined(__clang__)
-#pragma warning( disable: 4267 )
+#pragma warning(disable : 4267)
 #endif
 #include <nanoflann.hpp>
 DISABLE_WARNING_POP
@@ -143,6 +143,31 @@ namespace DwgSim
         return ret;
     }
 
+    template <int dim>
+    inline auto getPtsDuplicationsInPts(t_eigenPts<dim> &linesInf, t_eigenPts<dim> &tests, double eps)
+    {
+        using namespace nanoflann;
+        typedef KDTreeVectorOfVectorsAdaptor<t_eigenPts<dim>, double>
+            kd_tree_t;
+
+        std::vector<std::pair<int64_t, int64_t>> ret;
+        if (!linesInf.size())
+            return ret;
+
+        kd_tree_t kd_tree(dim, linesInf);
+
+        nanoflann::SearchParameters params;
+        params.sorted = true;
+        for (int64_t i = 0; i < int64_t(tests.size()); i++)
+        {
+            std::vector<nanoflann::ResultItem<size_t, double>> result;
+            kd_tree.index->radiusSearch(tests[i].data(), (eps * eps), result, params);
+            for (auto j : result)
+                ret.push_back(std::make_pair(int64_t(j.first), i));
+        }
+        return ret;
+    }
+
     static auto Seq012 = Eigen::seq(Eigen::fix<0>, Eigen::fix<2>);
     static auto Seq345 = Eigen::seq(Eigen::fix<3>, Eigen::fix<5>);
     static auto Seq678 = Eigen::seq(Eigen::fix<6>, Eigen::fix<8>);
@@ -200,12 +225,14 @@ namespace DwgSim
         return ret;
     }
 
-    inline auto getInfLineNormalized(t_eigenPts<6> &linesInf)
+    inline auto getInfLineNormalized(t_eigenPts<6> &linesInf, double &maxBaseSiz, bool updateMax = true)
     {
         t_eigenPts<6> ret = linesInf;
-        double maxBaseSiz = 1e-300;
-        for (int64_t i = 0; i < (int64_t)linesInf.size(); i++)
-            maxBaseSiz = std::max(maxBaseSiz, ret[i](Seq345).norm());
+        if (updateMax)
+            maxBaseSiz = 1e-300;
+        if (updateMax)
+            for (int64_t i = 0; i < (int64_t)linesInf.size(); i++)
+                maxBaseSiz = std::max(maxBaseSiz, ret[i](Seq345).norm());
         for (int64_t i = 0; i < (int64_t)linesInf.size(); i++)
             ret[i](Seq345) /= maxBaseSiz;
         return ret;
@@ -213,8 +240,9 @@ namespace DwgSim
 
     inline auto getLinesDuplicationsAtInf(t_eigenPts<6> &lines, double eps = 1e-8)
     {
+        double maxBase;
         auto linesInf = linesToInfLine(lines);
-        auto linesInfNorm = getInfLineNormalized(linesInf);
+        auto linesInfNorm = getInfLineNormalized(linesInf, maxBase);
         return getPtsDuplications<6>(linesInfNorm, eps);
     }
 
@@ -226,8 +254,9 @@ namespace DwgSim
      */
     inline auto linesDuplications(t_eigenPts<6> &lines, double eps = 1e-8, double lEps = 1e-5)
     {
+        double maxBase{1e-100};
         auto linesInf = linesToInfLine(lines);
-        auto linesInfNorm = getInfLineNormalized(linesInf);
+        auto linesInfNorm = getInfLineNormalized(linesInf, maxBase);
         auto infDup = getPtsDuplications<6>(linesInfNorm, eps);
         std::vector<int64_t> inPreciseDups(lines.size(), -1);
         std::vector<std::set<int64_t>> preciseDups;
@@ -272,20 +301,65 @@ namespace DwgSim
         return std::make_tuple(preciseDups, includeDups);
     }
 
-    inline auto arcsRegulate(t_eigenPts<9> &arcs)
+    inline auto lineInLinesDuplications(t_eigenPts<6> &lines, t_eigenPts<6> &linesTest, double eps = 1e-8, double lEps = 1e-5)
+    {
+        double maxL{1e-100};
+        auto linesInf = linesToInfLine(lines);
+        auto linesInfNorm = getInfLineNormalized(linesInf, maxL);
+        auto linesInfTest = linesToInfLine(linesTest);
+        auto linesInfNormTest = getInfLineNormalized(linesInfTest, maxL, false);
+
+        auto infDup = getPtsDuplicationsInPts<6>(linesInfNorm, linesInfNormTest, eps);
+
+        std::vector<std::pair<int64_t, int64_t>> preciseDups;
+        std::vector<std::pair<int64_t, int64_t>> includeDups;
+
+        for (auto &p : infDup)
+        {
+            auto i = p.first;
+            auto j = p.second;
+
+            Vec3 dir = linesInf[i](Seq012);
+            Vec3 base = linesInf[i](Seq345);
+            double Li = (lines[i](Seq012) - base).dot(dir);
+            double Ri = (lines[i](Seq345) - base).dot(dir);
+            if (Li > Ri)
+                std::swap(Li, Ri);
+            double Lj = (linesTest[j](Seq012) - base).dot(dir);
+            double Rj = (linesTest[j](Seq345) - base).dot(dir);
+            if (Lj > Rj)
+                std::swap(Lj, Rj);
+
+            if (std::abs(Li - Lj) < lEps && std::abs(Ri - Rj) < lEps)
+                preciseDups.push_back(std::make_pair(i, j));
+            if (Li - lEps < Lj && Ri + lEps > Rj)
+                includeDups.emplace_back(std::make_pair(i, j));
+        }
+        return std::make_tuple(preciseDups, includeDups);
+    }
+
+    inline auto arcsRegulate(t_eigenPts<9> &arcs, double &maxPos, double &maxR, double eps, bool updateMax = true)
     {
         t_eigenPts<9> ret = arcs;
-        double maxPos = 1e-100;
-        double maxR = 1e-100;
+        if (updateMax)
+        {
+            maxPos = 1e-100;
+            maxR = 1e-100;
+        }
         for (auto &v : ret)
         {
             if (v(8) < v(7))
                 v(8) += 2 * pi;
+            if (v(7) >= 2 * pi - eps)
+                v(8) -= 2 * pi, v(7) -= 2 * pi;
             assert(v(8) >= v(7));
 
             v(Seq012).normalize();
-            maxPos = std::max(maxPos, v(Seq345).norm());
-            maxR = std::max(maxR, v(6));
+            if (updateMax)
+            {
+                maxPos = std::max(maxPos, v(Seq345).norm());
+                maxR = std::max(maxR, v(6));
+            }
         }
         for (auto &v : ret)
         {
@@ -305,7 +379,8 @@ namespace DwgSim
 
     inline auto arcsDuplications(t_eigenPts<9> &arcs, double eps = 1e-8)
     {
-        auto arcsReg = arcsRegulate(arcs);
+        double maxPos{1e-100}, maxR{1e-100};
+        auto arcsReg = arcsRegulate(arcs, maxPos, maxR, eps);
         auto circs = arcsToCircle(arcsReg);
         // std::vector<int64_t> inPreciseDups(arcs.size(), -1);
         std::vector<std::set<int64_t>> preciseDups;
@@ -331,6 +406,37 @@ namespace DwgSim
                         includeDups.push_back(std::make_pair(i, j));
                 }
             }
+        }
+
+        return std::make_tuple(preciseDups, includeDups);
+    }
+
+    inline auto arcInArcsDuplications(t_eigenPts<9> &arcs, t_eigenPts<9> &arcsTests, double eps = 1e-8)
+    {
+        double maxPos{1e-100}, maxR{1e-100};
+        auto arcsReg = arcsRegulate(arcs, maxPos, maxR, eps);
+        auto circs = arcsToCircle(arcsReg);
+
+        auto arcsRegTests = arcsRegulate(arcsTests, maxPos, maxR, eps, false);
+        auto circsTests = arcsToCircle(arcsRegTests);
+
+        auto circDup = getPtsDuplicationsInPts<7>(circs, circsTests, eps);
+        auto preciseDups = getPtsDuplicationsInPts<9>(arcsReg, arcsRegTests, eps);
+
+        std::vector<std::pair<int64_t, int64_t>> includeDups;
+        for (auto &p : circDup)
+        {
+            auto i = p.first;
+            auto j = p.second;
+
+            double t0 = arcsReg[i](7);
+            double t1 = arcsReg[i](8);
+            double t0c = arcsRegTests[j](7);
+            double t1c = arcsRegTests[j](8);
+            if (t0 <= t0c + eps && t1 >= t1c - eps)
+                includeDups.push_back(std::make_pair(i, j));
+            if (t0 == 0 && t1 == 2 * pi) // is a circle
+                includeDups.push_back(std::make_pair(i, j));
         }
 
         return std::make_tuple(preciseDups, includeDups);

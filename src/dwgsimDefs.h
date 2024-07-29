@@ -7,8 +7,6 @@
 #include <argparse/argparse.hpp>
 #include <rapidjson/rapidjson.h>
 
-
-
 #define DNDS_MACRO_TO_STRING(V) __DNDS_str(V)
 #define __DNDS_str(V) #V
 
@@ -39,6 +37,14 @@ namespace DwgSim
     };
 
     const double pi = 3.141592653589793238462643;
+
+    inline double angleFromXY(double x, double y, double radius)
+    {
+        double ret = std::acos(x / radius);
+        if (y < 0)
+            ret = 2 * pi - ret;
+        return ret;
+    }
 }
 
 #pragma once

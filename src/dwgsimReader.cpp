@@ -701,8 +701,8 @@ namespace DwgSim
         auto reportArcOrCirc = [&](rapidjson::Value &v)
         {
             using namespace std::literals;
-            std::cerr << v["handle"].GetInt64();
-            std::cerr << v["type"].GetString();
+            std::cerr << v["handle"].GetInt64() << " ";
+            std::cerr << v["type"].GetString() << " ";
             std::cerr << v["extrusion"][0].GetDouble() << " ";
             std::cerr << v["extrusion"][1].GetDouble() << " ";
             std::cerr << v["extrusion"][2].GetDouble() << " ";
@@ -726,6 +726,11 @@ namespace DwgSim
             std::vector<int64_t> arc2ListIdx;
             t_eigenPts<9> arcs;
 
+            std::vector<int64_t> linePoly2ListIdx;
+            t_eigenPts<6> linesPoly;
+            std::vector<int64_t> arcPoly2ListIdx;
+            t_eigenPts<9> arcsPoly;
+
             for (int64_t i = 0; i < elist.Size(); i++)
             {
                 if (elist[i]["type"].GetString() == "LINE"s)
@@ -740,10 +745,6 @@ namespace DwgSim
                     lines.push_back(lineDat);
                     line2ListIdx.push_back(i);
                 }
-            }
-
-            for (int64_t i = 0; i < elist.Size(); i++)
-            {
                 if (elist[i]["type"].GetString() == "ARC"s || elist[i]["type"].GetString() == "CIRCLE"s)
                 {
                     Eigen::Vector<double, 9> arcDat;
@@ -767,10 +768,70 @@ namespace DwgSim
                     arcs.push_back(arcDat);
                     arc2ListIdx.push_back(i);
                 }
+                if (elist[i]["type"].GetString() == "POLYLINE_2D"s || elist[i]["type"].GetString() == "POLYLINE_3D"s)
+                {
+                    for (int64_t iv = 1; iv < elist[i]["vertex"].Size(); iv++)
+                    {
+                        Vec3 p0, p1, extrusion;
+                        p0(0) = elist[i]["vertex"][iv - 1][0].GetDouble();
+                        p0(1) = elist[i]["vertex"][iv - 1][1].GetDouble();
+                        p0(2) = elist[i]["vertex"][iv - 1][2].GetDouble();
+                        p1(0) = elist[i]["vertex"][iv][0].GetDouble();
+                        p1(1) = elist[i]["vertex"][iv][1].GetDouble();
+                        p1(2) = elist[i]["vertex"][iv][2].GetDouble();
+                        extrusion(0) = elist[i]["extrusion"][0].GetDouble();
+                        extrusion(1) = elist[i]["extrusion"][1].GetDouble();
+                        extrusion(2) = elist[i]["extrusion"][2].GetDouble();
+                        double bulge = elist[i]["bulge"][iv - 1].GetDouble();
+
+                        if (elist[i]["type"].GetString() == "POLYLINE_3D"s || std::abs(bulge) < 1e-6)
+                        {
+                            // TODO: if 2D, convert into OCS
+                            Eigen::Vector<double, 6> lineDat;
+                            lineDat(Seq012) = p0;
+                            lineDat(Seq345) = p1;
+                            linesPoly.push_back(lineDat);
+                            linePoly2ListIdx.push_back(i);
+                        }
+                        else
+                        {
+                            // double ctanT = std::tan(pi / 2 - std::atan(bulge) * 2);
+                            double ctanT = (1 - bulge * bulge) / (2 * bulge);
+                            Vec3 p01 = p1 - p0;
+                            Vec3 p01L = p01;
+                            p01L(0) = -p01(1);
+                            p01L(1) = p01(0);
+                            Vec3 cent = 0.5 * (p0 + p1) + p01L * 0.5 * ctanT;
+                            Vec3 pc0 = p0 - cent;
+                            Vec3 pc1 = p1 - cent;
+                            double rad = 0.5 * (pc0.norm() + pc1.norm());
+                            double t0 = angleFromXY(pc0(0), pc0(1), pc0.norm());
+                            double t1 = angleFromXY(pc1(0), pc1(1), pc1.norm());
+                            if (bulge < 0)
+                                std::swap(t0, t1);
+                            Eigen::Vector<double, 9> arcDat;
+                            arcDat(0) = elist[i]["extrusion"][0].GetDouble();
+                            arcDat(1) = elist[i]["extrusion"][1].GetDouble();
+                            arcDat(2) = elist[i]["extrusion"][2].GetDouble();
+                            arcDat(Seq345) = cent;
+                            arcDat(6) = rad;
+                            arcDat(7) = t0;
+                            arcDat(8) = t1;
+                            arcsPoly.push_back(arcDat);
+                            arcPoly2ListIdx.push_back(i);
+                        }
+                    }
+                }
             }
 
             auto [dupPrecise, dupInclude] = linesDuplications(lines, 1e-8, 1e-5);
             auto [dupPreciseArc, dupIncludeArc] = arcsDuplications(arcs, 1e-8);
+            auto [dupPrecisePoly, dupIncludePoly] = lineInLinesDuplications(linesPoly, lines, 1e-8, 1e-5);
+            auto [dupPreciseArcPoly, dupIncludeArcPoly] = arcInArcsDuplications(arcsPoly, arcs, 1e-8);
+            for (auto &v : linesPoly)
+                std::cout << "line " << v.transpose() << std::endl;
+            for (auto &v : arcsPoly)
+                std::cout << "arcs " << v.transpose() << std::endl;
             if (warningLevel >= 1)
             {
                 for (auto &s : dupPrecise)
@@ -784,6 +845,16 @@ namespace DwgSim
                     std::cerr << "Duplicate in block [" << blkName << "]" << "\n";
                     for (auto ii : s)
                         reportArcOrCirc(elist[arc2ListIdx[ii]]);
+                }
+                for (auto &p : dupPrecisePoly)
+                {
+                    std::cerr << "Duplicate from Poly Seg in block [" << blkName << "]" << "\n";
+                    reportLine(elist[line2ListIdx[p.second]]);
+                }
+                for (auto &p : dupPreciseArcPoly)
+                {
+                    std::cerr << "Duplicate from Poly Seg in block [" << blkName << "]" << "\n";
+                    reportArcOrCirc(elist[arc2ListIdx[p.second]]);
                 }
             }
             if (warningLevel >= 2)
@@ -803,6 +874,16 @@ namespace DwgSim
                     auto j = arc2ListIdx[p.second];
                     reportArcOrCirc(elist[i]);
                     reportArcOrCirc(elist[j]);
+                }
+                for (auto &p : dupIncludePoly)
+                {
+                    std::cerr << "Line Inclusion from Poly Seg in block [" << blkName << "]" << "\n";
+                    reportLine(elist[line2ListIdx[p.second]]);
+                }
+                for (auto &p : dupIncludeArcPoly)
+                {
+                    std::cerr << "Arc Inclusion from Poly Seg in block [" << blkName << "]" << "\n";
+                    reportArcOrCirc(elist[arc2ListIdx[p.second]]);
                 }
             }
 
@@ -826,6 +907,10 @@ namespace DwgSim
                         if (ii != s0)
                             lineDelete.insert(arc2ListIdx[ii]);
                 }
+                for (auto &p : dupPrecisePoly)
+                    lineDelete.insert(line2ListIdx[p.second]);
+                for (auto &p : dupPreciseArcPoly)
+                    lineDelete.insert(arc2ListIdx[p.second]);
             }
             if (deleteLevel >= 2)
             {
@@ -835,6 +920,10 @@ namespace DwgSim
                 for (auto &p : dupIncludeArc)
                     if (!lineDelete.count(arc2ListIdx[p.first]))
                         lineDelete.insert(arc2ListIdx[p.second]);
+                for (auto &p : dupIncludePoly)
+                    lineDelete.insert(line2ListIdx[p.second]);
+                for (auto &p : dupIncludeArcPoly)
+                    lineDelete.insert(arc2ListIdx[p.second]);
             }
 
             rapidjson::Value newList(rapidjson::kArrayType);
