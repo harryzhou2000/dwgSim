@@ -703,7 +703,7 @@ namespace DwgSim
             using namespace std::literals;
             assert(elist.IsArray());
             std::vector<int64_t> line2ListIdx;
-            t_infLineSet lines;
+            t_eigenPts<6> lines;
 
             for (int64_t i = 0; i < elist.Size(); i++)
             {

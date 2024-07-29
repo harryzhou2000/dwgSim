@@ -93,18 +93,21 @@ namespace DwgSim
 
     }; // end of KDTreeVectorOfVectorsAdaptor
 
-    using t_infLineSet = std::vector<Eigen::Vector<double, 6>>;
-    inline auto getInfLinesDuplications(t_infLineSet &linesInf, double eps)
+    template <int dim>
+    using t_eigenPts = std::vector<Eigen::Vector<double, dim>>;
+
+    template <int dim>
+    inline auto getPtsDuplications(t_eigenPts<dim> &linesInf, double eps)
     {
         using namespace nanoflann;
-        typedef KDTreeVectorOfVectorsAdaptor<t_infLineSet, double>
+        typedef KDTreeVectorOfVectorsAdaptor<t_eigenPts<dim>, double>
             kd_tree_t;
 
         std::vector<std::set<int64_t>> ret;
         if (!linesInf.size())
             return ret;
 
-        kd_tree_t kd_tree(6, linesInf);
+        kd_tree_t kd_tree(dim, linesInf);
 
         std::vector<int64_t> inSet;
         inSet.resize(linesInf.size(), -1);
@@ -138,9 +141,9 @@ namespace DwgSim
     static auto Seq012 = Eigen::seq(Eigen::fix<0>, Eigen::fix<2>);
     static auto Seq345 = Eigen::seq(Eigen::fix<3>, Eigen::fix<5>);
 
-    inline auto linesToInfLine(t_infLineSet &lines)
+    inline auto linesToInfLine(t_eigenPts<6> &lines)
     {
-        t_infLineSet ret = lines;
+        t_eigenPts<6> ret = lines;
         for (int64_t i = 0; i < (int64_t)lines.size(); i++)
         {
             Vec3 p0 = lines[i](Seq012);
@@ -185,9 +188,9 @@ namespace DwgSim
         return ret;
     }
 
-    inline auto getInfLineNormalized(t_infLineSet &linesInf)
+    inline auto getInfLineNormalized(t_eigenPts<6> &linesInf)
     {
-        t_infLineSet ret = linesInf;
+        t_eigenPts<6> ret = linesInf;
         double maxBaseSiz = 1e-300;
         for (int64_t i = 0; i < (int64_t)linesInf.size(); i++)
             maxBaseSiz = std::max(maxBaseSiz, ret[i](Seq345).norm());
@@ -196,18 +199,18 @@ namespace DwgSim
         return ret;
     }
 
-    inline auto getLinesDuplicationsAtInf(t_infLineSet &lines, double eps = 1e-8)
+    inline auto getLinesDuplicationsAtInf(t_eigenPts<6> &lines, double eps = 1e-8)
     {
         auto linesInf = linesToInfLine(lines);
         auto linesInfNorm = getInfLineNormalized(linesInf);
-        return getInfLinesDuplications(linesInfNorm, eps);
+        return getPtsDuplications<6>(linesInfNorm, eps);
     }
 
-    inline auto linesDuplications(t_infLineSet &lines, double eps = 1e-8, double lEps = 1e-5)
+    inline auto linesDuplications(t_eigenPts<6> &lines, double eps = 1e-8, double lEps = 1e-5)
     {
         auto linesInf = linesToInfLine(lines);
         auto linesInfNorm = getInfLineNormalized(linesInf);
-        auto infDup = getInfLinesDuplications(linesInfNorm, eps);
+        auto infDup = getPtsDuplications<6>(linesInfNorm, eps);
         std::vector<int64_t> inPreciseDups(lines.size(), -1);
         std::vector<std::set<int64_t>> preciseDups;
         std::vector<std::pair<int64_t, int64_t>> includeDups;

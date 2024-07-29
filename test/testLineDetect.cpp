@@ -8,13 +8,13 @@ namespace DwgSim
 {
     void test1()
     {
-        t_infLineSet lineSet;
+        t_eigenPts<6> lineSet;
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 0, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 1, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 1, 0, 0, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 1, 0, 0, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 0, 0, 0});
-        auto ret = getInfLinesDuplications(lineSet, 1e-5);
+        auto ret = getPtsDuplications<6>(lineSet, 1e-5);
         for (auto &s : ret)
         {
             for (auto &v : s)
@@ -26,7 +26,7 @@ namespace DwgSim
 
     void test2()
     {
-        t_infLineSet lineSet;
+        t_eigenPts<6> lineSet;
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 0, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 1, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{1, 0, 0, 0, 1, 0});
@@ -44,7 +44,7 @@ namespace DwgSim
 
     void test3()
     {
-        t_infLineSet lineSet;
+        t_eigenPts<6> lineSet;
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 0, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{0, 0, 0, 1, 0, 0});
         lineSet.push_back(Eigen::Vector<double, 6>{1, 0, 0, 0, 1, 0});
