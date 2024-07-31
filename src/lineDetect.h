@@ -442,6 +442,26 @@ namespace DwgSim
         return std::make_tuple(preciseDups, includeDups);
     }
 
+    /**
+     * @brief
+     *
+     * @param L
+     * @param R
+     * @param eps
+     * @return int (-1 if L < R), (1 if L > R), (0 if L = R)
+     */
+    inline int coordCompare(const Vec3 &L, const Vec3 &R, double eps)
+    {
+        for (int dim = 0; dim < 2; dim++)
+        {
+            if (L(dim) < R(dim) - eps)
+                return -1;
+            else if (L(dim) - eps > R(dim))
+                return 1;
+        }
+        return 0;
+    }
+
     class PolylineGeomSet
     {
         std::map<int, std::set<int64_t>> siz_to_idx;
@@ -471,10 +491,37 @@ namespace DwgSim
                 {
                     polyVecsCur.push_back(polyVecs[i]);
                     localIdx.push_back(i);
-                    maxL = std::max(maxL, polyVecs[i](Eigen::seq(3, Eigen::last)).array().abs().maxCoeff());
+                    for (int ii = 0; ii < siz; ii++)
+                        maxL = std::max(maxL, polyVecs[i](Eigen::seq(3 + 4 * ii, 5 + 4 * ii)).array().abs().maxCoeff());
                 }
                 for (auto &v : polyVecsCur)
-                    v(Eigen::seq(3, Eigen::last)) /= maxL;
+                {
+                    for (int ii = 0; ii < siz; ii++)
+                        v(Eigen::seq(3 + 4 * ii, 5 + 4 * ii)) /= maxL; // normalize
+                    v(v.size() - 1) = 0;                               // last bulge is not used
+                    if (siz >= 2)
+                    {
+                        int cmp01 = coordCompare(v(Eigen::seq(3 + 4 * 0, 5 + 4 * 0)), v(Eigen::seq(3 + 4 * (siz - 1), 5 + 4 * (siz - 1))), eps);
+                        bool invert = false;
+                        if (cmp01 > 0) 
+                            invert = true;
+                        if (cmp01 == 0)
+                        {
+                            int cmpm11 = coordCompare(v(Eigen::seq(3 + 4 * 1, 5 + 4 * 1)), v(Eigen::seq(3 + 4 * (siz - 2), 5 + 4 * (siz - 2))), eps);
+                            if (cmpm11 > 0 || (cmpm11 == 0 && v(6 + 4 * 0) < 0) || (cmpm11 == 0 && v(6 + 4 * (siz - 2)) < 0))
+                                invert = true;
+                        }
+                        if (invert) // invert
+                        {
+                            Eigen::VectorXd v1 = v;
+                            for (int ii = 0; ii < siz; ii++)
+                                v1(Eigen::seq(3 + 4 * ii, 5 + 4 * ii)) = v(Eigen::seq(3 + 4 * (siz - 1 - ii), 5 + 4 * (siz - 1 - ii)));
+                            for (int ii = 0; ii < siz - 1; ii++)
+                                v1(6 + 4 * ii) = -v(6 + 4 * (siz - 2 - ii));
+                            v = v1;
+                        }
+                    }
+                }
 
                 auto dups = getPtsDuplications<Eigen::Dynamic>(polyVecsCur, eps);
                 for (auto &ss : dups)
