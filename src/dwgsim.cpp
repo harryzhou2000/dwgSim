@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
     argparser.add_argument("-O").default_value("JSON").help("output format");
     argparser.add_argument("--dupWarn").default_value(0).store_into(dupWarn);
     argparser.add_argument("--dupDel").default_value(0).store_into(dupDel);
+    argparser.add_argument("--clear").flag().help("clear stdout");
 
     try
     {
@@ -29,11 +30,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "reading from: " << argparser.get("input") << std::endl;
-    if (argparser.is_used("-o"))
-        std::cout << "writing to: " << argparser.get("-o") << std::endl;
-    else
-        std::cout << "writing to stdout" << std::endl;
+    if (argparser["--clear"] == false)
+    {
+        std::cout << "reading from: " << argparser.get("input") << std::endl;
+        if (argparser.is_used("-o"))
+            std::cout << "writing to: " << argparser.get("-o") << std::endl;
+        else
+            std::cout << "writing to stdout" << std::endl;
+    }
     std::string filename_in = argparser.get("input");
 
     try
